@@ -157,8 +157,8 @@ function templateMarkup() {
           '<button id="wizard-submit" class="btn btn-primary" type="submit" ' +
             'disabled>0 of 3 requirements met</button>' +
         '</div>' +
-        '<p id="wizard-confirm" class="badge" role="status" aria-live="polite" ' +
-          'hidden></p>' +
+        '<div id="wizard-confirm" class="badge" role="status" aria-live="polite" ' +
+          'hidden></div>' +
       '</div>' +
     '</form>'
   );
@@ -168,10 +168,12 @@ function templateMarkup() {
  * Initialise the Submit view.
  * @param {HTMLElement} rootEl - the section#view-submit container.
  * @param {{ store: object, profileId?: string|null,
- *           onPitchSubmitted?: function }} deps - injected deps.
+ *           onPitchSubmitted?: function, goToView?: function }} deps
  *   deps.store persists the pitch; deps.profileId stamps owner_id on it;
  *   deps.onPitchSubmitted is the app.js-owned celebration hook, fired after
- *   every successful submit (this view never learns what it celebrates).
+ *   every successful submit (this view never learns what it celebrates);
+ *   deps.goToView is the app.js-owned view switcher backing the
+ *   confirmation's Arena/Locker CTA buttons (navigation only).
  */
 export function initWizard(rootEl, deps) {
   if (!rootEl) return;
@@ -191,6 +193,11 @@ export function initWizard(rootEl, deps) {
     deps && typeof deps.onPitchSubmitted === 'function'
       ? deps.onPitchSubmitted
       : null;
+  // App.js-owned view switcher for the confirmation CTAs ("Vote in the
+  // Arena" / "Open your Locker"). Pure navigation — nothing score-shaped
+  // crosses the seam. Optional: without it the confirmation is text-only.
+  const goToView =
+    deps && typeof deps.goToView === 'function' ? deps.goToView : null;
   // NOTE: a ranking (or progression) dependency, if ever injected by a test,
   // MUST NOT be used in this view.
 
@@ -286,12 +293,41 @@ export function initWizard(rootEl, deps) {
     const title = (pitch && pitch.title) || 'Your concept';
     // Confirmation carries NO score or rank — structural access split. It
     // funnels to BOTH progression surfaces instead (PRD P0-2 dual funnel):
-    // the Locker tracks the pitch, the Arena pays rank while it calibrates.
-    confirmEl.textContent =
-      'Added "' + title + '" to the arena. Track its battles in your ' +
-      'Locker, and earn rank in the Arena while it calibrates.';
+    // the Locker tracks the pitch, the Arena pays rank while it calibrates —
+    // and the funnel is ACTIONABLE: real buttons jump straight there, so the
+    // loop never dead-ends on a paragraph of directions.
+    const message = document.createElement('p');
+    message.textContent =
+      'Added "' + title + '" to the arena. It battles as the community ' +
+      'votes — track it in your Locker, earn rank in the Arena meanwhile.';
+    confirmEl.replaceChildren(message);
+    if (goToView) {
+      const actions = document.createElement('div');
+      actions.className = 'confirm-actions';
+      actions.appendChild(
+        makeConfirmButton('Vote in the Arena', 'arena', true)
+      );
+      actions.appendChild(makeConfirmButton('Open your Locker', 'locker', false));
+      confirmEl.appendChild(actions);
+    }
     confirmEl.hidden = false;
     confirmEl.classList.add('is-visible');
+  }
+
+  /** One confirmation CTA: a small button that jumps to the named view. */
+  function makeConfirmButton(label, view, primary) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'confirm-btn' + (primary ? ' confirm-btn--primary' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', function () {
+      try {
+        goToView(view);
+      } catch (_err) {
+        /* navigation is app.js's job; a fault here must never throw */
+      }
+    });
+    return btn;
   }
 
   function hideConfirmation() {

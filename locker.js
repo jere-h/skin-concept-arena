@@ -241,6 +241,15 @@ function renderRankTile(el, ladder, points) {
       : 0;
   meter.setAttribute('aria-label', 'Progress to the next rank');
   el.appendChild(meter);
+
+  // The point sources in one line, so "next rank at 10" is actionable instead
+  // of opaque (the header's "?" tip carries the full rules).
+  const hint = document.createElement('p');
+  hint.className = 'locker-rank__hint';
+  hint.textContent =
+    'Earn points: +1 per vote you cast, +10 per badge, 10–70 per pitch ' +
+    'peak medal.';
+  el.appendChild(hint);
 }
 
 /** Block 2 — the owned-pitch list (or the loop-teaching empty state). */

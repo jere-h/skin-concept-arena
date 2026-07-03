@@ -23,20 +23,37 @@
 // two in sync with the design spec's token contract.
 export const ART_HUES = ['#b07038', '#5f8ed0', '#b5851b', '#1f9db8', '#f25c2a'];
 
-/**
- * Stable hue for a pitch id: a djb2-style string hash over the fixed hue set.
- * The same id always yields the same hue; a missing id degrades to the first
- * hue rather than throwing.
- * @param {string|null|undefined} id
- * @returns {string} a hex color from ART_HUES
- */
-export function artHue(id) {
+/** djb2-style string hash — the one source of per-pitch determinism here. */
+function hashOf(id) {
   const key = String(id == null ? '' : id);
   let hash = 5381;
   for (let i = 0; i < key.length; i++) {
     hash = ((hash << 5) + hash + key.charCodeAt(i)) >>> 0;
   }
-  return ART_HUES[hash % ART_HUES.length];
+  return hash;
+}
+
+/**
+ * Stable hue for a pitch id: the hash over the fixed hue set. The same id
+ * always yields the same hue; a missing id degrades to the first hue rather
+ * than throwing.
+ * @param {string|null|undefined} id
+ * @returns {string} a hex color from ART_HUES
+ */
+export function artHue(id) {
+  return ART_HUES[hashOf(id) % ART_HUES.length];
+}
+
+/**
+ * The companion hue for the duotone wash: a DIFFERENT entry from the same
+ * fixed set, offset 1-3 by higher hash bits so it can never equal the primary
+ * (offset < set length) and stays just as deterministic.
+ */
+function artHue2(id) {
+  const hash = hashOf(id);
+  const primary = hash % ART_HUES.length;
+  const offset = 1 + ((hash >>> 4) % 3);
+  return ART_HUES[(primary + offset) % ART_HUES.length];
 }
 
 // Item-slot glyphs as stroke path data (viewBox 0 0 64 40, drawn around the
@@ -98,16 +115,24 @@ function slotGlyphPaths(slot) {
   return DEFAULT_GLYPH;
 }
 
+// Monotonic counter for per-instance SVG gradient ids (defs ids are
+// document-global, so every art node needs its own).
+let artInstanceSeq = 0;
+
 /**
  * Build the deterministic placeholder art node for a pitch: a 16:10 art zone
- * (`.pitch-art`) with a hue wash, a decorative ring, and the slot glyph.
+ * (`.pitch-art`) composed like a key-art frame — a duotone gradient wash, a
+ * soft radial glow behind the slot glyph, quiet corner rings, and a ground
+ * line. Everything derives from the pitch id hash; nothing is random.
  * Fail-safe: garbage pitches still yield a valid node.
  * @param {{id?: string, item_slot?: string}|null} pitch
  * @returns {HTMLElement}
  */
 export function makePitchArt(pitch) {
   const NS = 'http://www.w3.org/2000/svg';
-  const hue = artHue(pitch && pitch.id);
+  const id = pitch && pitch.id;
+  const hue = artHue(id);
+  const hue2 = artHue2(id);
   const slot =
     pitch && typeof pitch.item_slot === 'string' && pitch.item_slot
       ? pitch.item_slot
@@ -123,26 +148,85 @@ export function makePitchArt(pitch) {
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
 
-  // Hue wash over the raised art-zone surface (the wrapper's CSS background).
+  // Duotone gradient wash: primary hue lighting the top-left, the companion
+  // hue fading through the bottom-right — depth instead of a flat tint.
+  const gradId = 'pitch-art-grad-' + ++artInstanceSeq;
+  const defs = document.createElementNS(NS, 'defs');
+  const grad = document.createElementNS(NS, 'linearGradient');
+  grad.setAttribute('id', gradId);
+  grad.setAttribute('x1', '0');
+  grad.setAttribute('y1', '0');
+  grad.setAttribute('x2', '1');
+  grad.setAttribute('y2', '1');
+  const stops = [
+    ['0%', hue, '0.32'],
+    ['55%', hue, '0.10'],
+    ['100%', hue2, '0.22'],
+  ];
+  for (const [offset, color, opacity] of stops) {
+    const stop = document.createElementNS(NS, 'stop');
+    stop.setAttribute('offset', offset);
+    stop.setAttribute('stop-color', color);
+    stop.setAttribute('stop-opacity', opacity);
+    grad.appendChild(stop);
+  }
+  defs.appendChild(grad);
+  svg.appendChild(defs);
+
   const wash = document.createElementNS(NS, 'rect');
   wash.setAttribute('x', '0');
   wash.setAttribute('y', '0');
   wash.setAttribute('width', '64');
   wash.setAttribute('height', '40');
-  wash.setAttribute('fill', hue);
-  wash.setAttribute('fill-opacity', '0.13');
+  wash.setAttribute('fill', 'url(#' + gradId + ')');
   svg.appendChild(wash);
 
-  // One quiet decorative ring, offset to the corner for depth.
+  // Quiet composition rings: the big one offset to the corner (depth), a
+  // small echo top-left in the companion hue.
   const ring = document.createElementNS(NS, 'circle');
-  ring.setAttribute('cx', '51');
-  ring.setAttribute('cy', '34');
-  ring.setAttribute('r', '15');
+  ring.setAttribute('cx', '53');
+  ring.setAttribute('cy', '35');
+  ring.setAttribute('r', '16');
   ring.setAttribute('fill', 'none');
-  ring.setAttribute('stroke', hue);
-  ring.setAttribute('stroke-opacity', '0.18');
+  ring.setAttribute('stroke', hue2);
+  ring.setAttribute('stroke-opacity', '0.28');
   ring.setAttribute('stroke-width', '2');
   svg.appendChild(ring);
+
+  const echo = document.createElementNS(NS, 'circle');
+  echo.setAttribute('cx', '9');
+  echo.setAttribute('cy', '5');
+  echo.setAttribute('r', '7');
+  echo.setAttribute('fill', 'none');
+  echo.setAttribute('stroke', hue);
+  echo.setAttribute('stroke-opacity', '0.2');
+  echo.setAttribute('stroke-width', '1.5');
+  svg.appendChild(echo);
+
+  // Soft two-layer glow disc behind the glyph so the mark sits on a stage
+  // instead of floating on the wash.
+  for (const [r, opacity] of [
+    ['15', '0.10'],
+    ['10.5', '0.12'],
+  ]) {
+    const glow = document.createElementNS(NS, 'circle');
+    glow.setAttribute('cx', '32');
+    glow.setAttribute('cy', '20');
+    glow.setAttribute('r', r);
+    glow.setAttribute('fill', hue);
+    glow.setAttribute('fill-opacity', opacity);
+    svg.appendChild(glow);
+  }
+
+  // A grounding baseline under the emblem: anchors the composition.
+  const ground = document.createElementNS(NS, 'path');
+  ground.setAttribute('d', 'M8 35h48');
+  ground.setAttribute('fill', 'none');
+  ground.setAttribute('stroke', hue);
+  ground.setAttribute('stroke-opacity', '0.22');
+  ground.setAttribute('stroke-width', '1.5');
+  ground.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(ground);
 
   // The slot glyph, stroked in the pitch's hue.
   const glyph = document.createElementNS(NS, 'g');

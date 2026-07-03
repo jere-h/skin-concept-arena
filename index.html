@@ -87,7 +87,7 @@
             <div class="wizard-actions">
               <button id="wizard-submit" type="submit" disabled>0 of 3 requirements met</button>
             </div>
-            <p id="wizard-confirm" class="badge" hidden></p>
+            <div id="wizard-confirm" class="badge" hidden></div>
           </div>
         </form>
       </section>
@@ -136,7 +136,33 @@
       <!-- LOCKER VIEW -->
       <section id="view-locker" class="view" aria-labelledby="locker-heading" hidden>
         <header class="view-head fade-in">
-          <h1 id="locker-heading" class="view-title">Your locker</h1>
+          <div class="view-title-row">
+            <h1 id="locker-heading" class="view-title">Your locker</h1>
+            <!-- Progression explainer: the same native <details> popover as the
+                 Arena's methodology tip (app.js wires dismissal + thresholds). -->
+            <details class="info-tip info-tip--start" id="locker-methodology">
+              <summary class="info-tip__trigger" aria-label="How medals, points, and ranks work">?</summary>
+              <div class="info-tip__panel" role="note">
+                <h2 class="info-tip__title">How medals become rank</h2>
+                <ol class="info-tip__list">
+                  <li><strong>Tier medals.</strong> Once a pitch has fought
+                    <span data-threshold>5</span> battles, its share of wins earns
+                    a medal — Bronze, Silver, Gold, or Diamond. Your Locker keeps
+                    the <em>best</em> tier each pitch has ever reached; peaks only
+                    move up.</li>
+                  <li><strong>Career points.</strong> Peak medals pay 10 / 20 /
+                    40 / 70 points, every badge unlock pays 10, and each vote you
+                    cast pays 1 (up to 100). Points only ever add up — your rank
+                    can never drop.</li>
+                  <li><strong>The ladder.</strong> Recruit &rarr; Apprentice (10)
+                    &rarr; Artisan (40) &rarr; Virtuoso (90) &rarr; Master (160)
+                    &rarr; Legend (250).</li>
+                </ol>
+                <p class="info-tip__foot">Exact win-rates and rankings stay with
+                  the studio — you see medals, never numbers.</p>
+              </div>
+            </details>
+          </div>
           <p class="view-lede">Your career rank, your own pitches' medals, and your badge case. Exact results stay with the studio.</p>
         </header>
 

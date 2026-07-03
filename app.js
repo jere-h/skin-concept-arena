@@ -415,7 +415,14 @@ function bootViews(activeProfile) {
   // the views never learn what a badge or rank is, they just report "something
   // happened" across the seam.
   if (submitEl) {
-    initWizard(submitEl, { store, profileId, onPitchSubmitted: celebrate });
+    // goToView backs the confirmation's Arena/Locker CTA buttons — pure
+    // navigation, so the access split is untouched.
+    initWizard(submitEl, {
+      store,
+      profileId,
+      onPitchSubmitted: celebrate,
+      goToView: showView,
+    });
   }
   if (arenaEl) {
     initArena(arenaEl, {

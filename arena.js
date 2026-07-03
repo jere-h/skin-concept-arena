@@ -35,8 +35,12 @@
 
 import { makeArtZone } from './art.js';
 
-// How long the chosen-card flash holds before the next pair renders.
-const SWAP_DELAY_MS = 200;
+// How long the resolved duel holds before the next pair renders. Long enough
+// that the winner stamp / loser dim / medallion flip register as a moment,
+// short enough that rapid voting never feels throttled. (The transitions
+// inside the hold stay within the 150-220ms motion band; this is dwell time,
+// not animation duration.)
+const SWAP_DELAY_MS = 450;
 
 // One copy covers both empty-pool cases: fewer than two pitches overall, and
 // two-plus pitches of which fewer than two belong to OTHER creators once the
@@ -179,7 +183,17 @@ export function initArena(rootEl, deps) {
   function renderPair(pair) {
     if (messageEl) messageEl.hidden = true;
     pairEl.hidden = false;
+    pairEl.classList.remove('is-resolved'); // fresh duel: medallion back to neutral
     pairEl.replaceChildren(makeCard(pair, 0), makeVsMedallion(), makeCard(pair, 1));
+  }
+
+  /** The "✓ Your pick" stamp overlaid on the winning card during the hold. */
+  function makePickStamp() {
+    const stamp = document.createElement('span');
+    stamp.className = 'pick-stamp';
+    stamp.setAttribute('aria-hidden', 'true'); // the vote itself is the record
+    stamp.textContent = '✓ Your pick';
+    return stamp;
   }
 
   /**
@@ -256,6 +270,16 @@ export function initArena(rootEl, deps) {
     });
     sessionVotes += 1;
     updateSessionStrip();
+    // Pulse the tally so the +1 visibly lands (transform-only, behind the
+    // reduced-motion gate in CSS). Restarting the animation needs the
+    // remove -> reflow -> re-add dance; all of it is decoration.
+    try {
+      stripVotesEl.classList.remove('is-bumped');
+      void stripVotesEl.offsetWidth; // restart the animation
+      stripVotesEl.classList.add('is-bumped');
+    } catch (_err) {
+      /* the pulse is decoration */
+    }
     // Celebration pass after the vote is committed and the strip reflects it.
     // Swallow any fault — celebration is decoration; the next pair must be
     // served no matter what happens on the other side of the seam.
@@ -267,14 +291,21 @@ export function initArena(rootEl, deps) {
       }
     }
     seenPairs.add(sampler.pairKey(aId, bId));
-    // The chosen-card flash (accent ring via CSS .is-chosen; the scale part is
-    // gated behind prefers-reduced-motion in styles.css). Decoration only:
-    // a classList fault must never stop the next pair from being served.
+    // The resolution beat: the chosen card wears the accent ring and the
+    // "✓ Your pick" stamp, the passed-over card recedes, and the VS medallion
+    // flips to the accent — a resolved duel, not a silent refresh. All of it
+    // is decoration: a DOM fault here must never stop the next pair.
     swapPending = true;
     try {
-      if (cardEl && cardEl.classList) cardEl.classList.add('is-chosen');
+      if (cardEl && cardEl.classList) {
+        cardEl.classList.add('is-chosen');
+        cardEl.appendChild(makePickStamp());
+      }
+      const passed = pairEl.querySelector('.pitch-card:not(.is-chosen)');
+      if (passed) passed.classList.add('is-passed');
+      pairEl.classList.add('is-resolved');
     } catch (_err) {
-      /* flash is decoration */
+      /* the resolution beat is decoration */
     }
     setTimeout(() => {
       swapPending = false;

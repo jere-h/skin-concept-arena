@@ -486,6 +486,46 @@ nav.tabs button.is-active {
   font-weight: 500;
 }
 
+/* The confirmation's next-step CTAs: the funnel to the Arena and Locker as
+   real buttons, not directions. One accent-filled primary (the loop's next
+   action: go vote) + one quiet ghost — still the single accent, no new hue. */
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.confirm-btn {
+  appearance: none;
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  padding: var(--space-2) var(--space-4);
+  min-height: 36px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease,
+    filter var(--t-fast) ease;
+}
+
+.confirm-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.confirm-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.confirm-btn--primary:hover {
+  filter: brightness(1.07);
+  color: var(--accent-ink);
+}
+
 /* ============================================================
    Arena — the duel stage: two pitch cards with a VS medallion between
    ============================================================ */
@@ -514,8 +554,10 @@ nav.tabs button.is-active {
 }
 
 /* One pitch card, reused by the Arena (as a button) and echoed by the Locker
-   rows: art zone on top, slot eyebrow, title, description, tag chips. */
+   rows: art zone on top, slot eyebrow, title, description, tag chips.
+   position: relative anchors the vote-resolution "✓ Your pick" stamp. */
 .pitch-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -586,12 +628,41 @@ nav.tabs button.is-active {
   height: 100%;
 }
 
-/* Chosen-card flash: an instant accent ring (arena.js holds the pair for
-   ~200ms before the next one slides in). The slight scale is motion, so it
-   lives behind the reduced-motion gate below. */
+/* The vote-resolution beat (arena.js holds the resolved duel briefly before
+   the next pair slides in): the chosen card wears an accent ring + the
+   "✓ Your pick" stamp, the passed-over card recedes, and the VS medallion
+   flips to the accent. The slight scale is motion, so it lives behind the
+   reduced-motion gate below; everything else is opacity/color only. */
 .pitch-card.is-chosen {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-glow);
+}
+
+.pitch-card.is-passed {
+  opacity: 0.45;
+  transition: opacity var(--t-fast) ease;
+}
+
+/* The stamp rides the top-right corner of the winning card's art zone. */
+.pick-stamp {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 1;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--r-chip);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.arena-pair.is-resolved .vs-medallion {
+  border-color: var(--accent);
+  color: var(--accent);
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -617,6 +688,30 @@ nav.tabs button.is-active {
     from {
       opacity: 0;
       transform: translateY(10px);
+    }
+  }
+
+  /* The "✓ Your pick" stamp pops in with the resolution beat. */
+  .pick-stamp {
+    animation: stamp-in var(--t-fast) ease both;
+  }
+
+  @keyframes stamp-in {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+  }
+
+  /* The session tally pulses as the +1 lands (arena.js re-arms the class). */
+  .session-strip__votes.is-bumped {
+    display: inline-block;
+    animation: strip-bump var(--t-med) ease;
+  }
+
+  @keyframes strip-bump {
+    50% {
+      transform: scale(1.12);
     }
   }
 }
@@ -728,6 +823,13 @@ progress.meter::-moz-progress-bar {
 }
 
 .locker-block .meter {
+  margin-top: var(--space-3);
+}
+
+/* The one-line "how points are earned" hint under the rank meter. */
+.locker-rank__hint {
+  color: var(--ink-2);
+  font-size: 0.875rem;
   margin-top: var(--space-3);
 }
 
@@ -1511,6 +1613,14 @@ progress.meter::-moz-progress-bar {
   color: var(--ink-2);
 }
 
+/* Start-anchored variant for tips whose trigger sits after a SHORT heading
+   (e.g. the Locker's): the panel opens rightward, into the page, instead of
+   clipping off the viewport's left edge. */
+.info-tip--start .info-tip__panel {
+  left: 0;
+  right: auto;
+}
+
 /* On narrow screens a trigger-anchored panel can overflow whichever side
    the trigger lands on (the title wraps), so anchor it to the full title
    row instead: it opens as a row-wide sheet just below the heading.
@@ -1525,7 +1635,10 @@ progress.meter::-moz-progress-bar {
     position: static;
   }
 
-  .info-tip__panel {
+  /* The start-anchored variant is listed too so its higher-specificity
+     desktop anchoring can't beat the row-wide sheet here. */
+  .info-tip__panel,
+  .info-tip--start .info-tip__panel {
     top: calc(100% + var(--space-2));
     left: 0;
     right: 0;
