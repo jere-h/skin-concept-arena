@@ -16,8 +16,13 @@
 //     them in inspiration.sources, with a one-line rationale note.
 //   - game-config.js vocabulary only (ITEM_SLOTS / THEME_TAGS), wizard
 //     length caps.
-//   - owner_id null (belongs to no one: everyone's Arena, no one's Locker),
-//     image_url '' (deterministic placeholder art — never AI images).
+//   - owner_id null (belongs to no one: everyone's Arena, no one's Locker).
+//   - image_url '' (deterministic placeholder art) — unless game-config.js
+//     SCOUT_IMAGES.enabled is true, in which case a pitch MAY ship AI
+//     concept art committed under SCOUT_IMAGES.asset_dir (named after the
+//     pitch id) with image_gen provenance: the filled prompt_template
+//     (scout.buildImagePrompt — cites both seeds + the item slot), the
+//     generator (image MCP) name, and a timestamp. Never an external URL.
 //   - active_from staggers a drop into the pool a couple of concepts at a
 //     time; created_at is generation time.
 //   - Drops are APPEND-ONLY. A merged drop is never edited — device stores

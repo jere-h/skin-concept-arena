@@ -6,7 +6,9 @@ wizard, vote in blind head-to-head **Arena** battles, track private
 progression in the **Locker**, and the design team reads the
 passphrase-gated **Studio** leaderboard. A **Scout pipeline** drips in
 AI-developed concepts authored by a recurring routine
-(`docs/scout-routine.md`) as human-reviewed PRs.
+(`docs/scout-routine.md`) as human-reviewed PRs — optionally with AI
+concept images from an image-generator MCP (off by default;
+`SCOUT_IMAGES` in `game-config.js`).
 
 ## Adapting this repo to a different game?
 

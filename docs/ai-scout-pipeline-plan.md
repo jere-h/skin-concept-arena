@@ -53,6 +53,14 @@ Twelve candidate directions:
   zero-external-assets design lock, and the app already has a good
   deterministic placeholder-art system. Scouts should wear exactly the same
   art treatment as human pitches.
+  *(Later amendment — tech-spec rev 5: #11 returned as a double-gated opt-in,
+  not a default. Off unless `game-config.js` `SCOUT_IMAGES.enabled` is
+  flipped AND an image-generator MCP is attached to the routine's session;
+  images are committed same-origin files (the design lock holds — nothing
+  external), the prompt is a validated per-pitch template filled from the
+  concept's two seeds and its slot, `image_gen` provenance ships with the
+  pitch, and the human PR gate reviews the images. The slop-tell risk is
+  exactly why it stays off by default.)*
 - **Demote #1** to an optional Studio convenience later; as the *primary*
   pipeline it has key-handling friction and produces nothing when nobody is
   sitting in the Studio. The stated need is a *steady* inflow.

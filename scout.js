@@ -10,6 +10,8 @@
 //                     stay in the Arena; older ones are flagged, never deleted
 //   composeArenaPool  cap the scout share of a served pool
 //   pickPairWithQuota never serve scout-vs-scout while a human pitch exists
+//   buildImagePrompt  fill the game-config SCOUT_IMAGES template for a pitch
+//                     (the optional concept-image path — routine STEP 4b)
 //
 // ZERO imports, by design: the sampler is passed in as a parameter (the same
 // injection style arena.js already uses for its deps), and this module never
@@ -153,6 +155,61 @@ export function composeArenaPool(pitches, share) {
 
   const keep = new Set(scouts.slice().sort(newnessDesc).slice(0, allowed).map((p) => p.id));
   return pool.filter((p) => !isScout(p) || keep.has(p.id));
+}
+
+/**
+ * Fill a SCOUT_IMAGES.prompt_template for one pitch — the templatized,
+ * dynamic image prompt the drop routine hands to its image-generator MCP
+ * (docs/scout-routine.md STEP 4b). Per-pitch variables come from the pitch
+ * itself: {seed_a} / {seed_b} are its two inspiration seeds, {slot} its
+ * cosmetic category, plus {title}, {tags} (comma-joined theme tags), and
+ * {description}. Game-level variables ({game_name}, {visual_direction}, or
+ * anything else) are injected via `context` — this module imports nothing,
+ * so game-config values arrive as parameters, same as the sampler does.
+ *
+ * Fail-safe by contract: returns '' (meaning "generate no image") when the
+ * template is empty/non-string or the pitch lacks the two inspiration seeds
+ * the template exists to fuse. Unknown {placeholders} are left verbatim so
+ * a template typo is visible in the output instead of silently swallowed;
+ * whitespace is collapsed. Pure — nothing is mutated.
+ *
+ * @param {object} pitch     a scout pitch (needs inspiration.sources[0..1])
+ * @param {string} template  game-config SCOUT_IMAGES.prompt_template
+ * @param {object} [context] extra vars, e.g. { game_name, visual_direction }
+ * @returns {string} the filled prompt, or '' when no image should be made
+ */
+export function buildImagePrompt(pitch, template, context) {
+  if (!pitch || typeof pitch !== 'object') return '';
+  if (typeof template !== 'string' || !template.trim()) return '';
+  const sources =
+    pitch.inspiration && Array.isArray(pitch.inspiration.sources)
+      ? pitch.inspiration.sources.filter((s) => typeof s === 'string' && s.trim())
+      : [];
+  if (sources.length < 2) return '';
+
+  const vars = {
+    seed_a: sources[0].trim(),
+    seed_b: sources[1].trim(),
+    slot: typeof pitch.item_slot === 'string' ? pitch.item_slot : '',
+    title: typeof pitch.title === 'string' ? pitch.title : '',
+    description: typeof pitch.description === 'string' ? pitch.description : '',
+    tags: Array.isArray(pitch.theme_tags)
+      ? pitch.theme_tags.filter((t) => typeof t === 'string').join(', ')
+      : '',
+  };
+  if (context && typeof context === 'object') {
+    for (const key of Object.keys(context)) {
+      const value = context[key];
+      if (typeof value === 'string') vars[key] = value;
+    }
+  }
+
+  return template
+    .replace(/\{([a-z0-9_]+)\}/gi, (match, key) =>
+      Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

@@ -10,6 +10,8 @@
 //   4. pickPairWithQuota — one scout per pair, passthrough statuses
 //   5. Drop data         — Drop 001 (and all future drops) pass the validator
 //   6. Validator teeth   — the mechanical anti-slop rules actually bite
+//   6a. Concept images   — buildImagePrompt template fill + the image rules
+//                          (SCOUT_IMAGES-gated, provenance, asset naming)
 //   7. Access split      — scout.js / scout-data.js reach neither ranking
 //                          nor progression (static import scan)
 //
@@ -29,6 +31,7 @@ import * as gameConfig from '../game-config.js';
 import {
   validateAll,
   validateDrop,
+  validateImageAssets,
   lexiconHits,
   similarity,
   sentenceCount,
@@ -289,15 +292,25 @@ describe('scout-data.js — every bundled drop passes the full validator', () =>
     assert.deepEqual(validateAll(SCOUT_DROPS, corpus, VOCAB), []);
   });
 
-  test('drops ship the documented shape (owner-less, art-less, sourced)', () => {
+  test('drops ship the documented shape (owner-less, sourced, image-honest)', () => {
     // An empty SCOUT_DROPS is legal (a freshly adapted game starts with no
-    // drops); whatever IS bundled must carry the contract shape.
+    // drops); whatever IS bundled must carry the contract shape. image_url
+    // is '' (placeholder art) unless SCOUT_IMAGES.enabled admits generated
+    // concept art — in which case provenance must ride along.
+    const images = gameConfig.SCOUT_IMAGES;
     for (const dropEntry of SCOUT_DROPS) {
       for (const pitch of dropEntry.pitches) {
         assert.equal(pitch.owner_id, null);
         assert.equal(pitch.origin, 'scout');
-        assert.equal(pitch.image_url, '');
         assert.ok(pitch.inspiration.sources.length >= 2);
+        if (pitch.image_url === '') continue;
+        assert.equal(images.enabled, true, `${pitch.id} ships an image while images are disabled`);
+        assert.ok(
+          pitch.image_url.startsWith('data:image/') ||
+            pitch.image_url.startsWith(images.asset_dir),
+          `${pitch.id} image_url must be committed art or a data URI`
+        );
+        assert.ok(pitch.image_gen && pitch.image_gen.prompt, `${pitch.id} missing image_gen provenance`);
       }
     }
   });
@@ -367,6 +380,158 @@ describe('validate-drops — the anti-slop rules reject what they must', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 6a. Concept images — the templatized prompt and the validator's image rules
+// ---------------------------------------------------------------------------
+
+describe('scout.buildImagePrompt — templatized, dynamic, fail-safe', () => {
+  const TEMPLATE =
+    'Concept art for "{title}", a {slot} cosmetic for {game_name}. ' +
+    'Fuse {seed_a} and {seed_b}. Mood: {tags}. Direction: {visual_direction}';
+  const CONTEXT = { game_name: 'Emberhold', visual_direction: 'grounded, worn materials' };
+
+  test('fills seeds, slot, tags, title, and injected context vars', () => {
+    const prompt = scout.buildImagePrompt(validScout('img'), TEMPLATE, CONTEXT);
+    assert.ok(prompt.includes('a Character Skin cosmetic for Emberhold'));
+    assert.ok(prompt.includes('Fuse Dockworker canvas gear and Brass shipfitting hardware'));
+    assert.ok(prompt.includes('Mood: Gritty'));
+    assert.ok(prompt.includes('"Test Concept img"'));
+    assert.ok(prompt.includes('Direction: grounded, worn materials'));
+  });
+
+  test("returns '' (make no image) without two seeds or a template", () => {
+    const seedless = validScout('noseeds', { inspiration: { sources: ['only one'], note: 'n' } });
+    assert.equal(scout.buildImagePrompt(seedless, TEMPLATE, CONTEXT), '');
+    assert.equal(scout.buildImagePrompt(validScout('x'), '', CONTEXT), '');
+    assert.equal(scout.buildImagePrompt(validScout('x'), '   ', CONTEXT), '');
+    assert.equal(scout.buildImagePrompt(null, TEMPLATE, CONTEXT), '');
+  });
+
+  test('unknown placeholders survive verbatim; whitespace collapses; pure', () => {
+    const pitch = validScout('typo');
+    const before = JSON.stringify(pitch);
+    const prompt = scout.buildImagePrompt(pitch, '{slot}   meets\n{not_a_var}', {});
+    assert.equal(prompt, 'Character Skin meets {not_a_var}');
+    assert.equal(JSON.stringify(pitch), before, 'pitch not mutated');
+  });
+
+  test('the SHIPPED template fills cleanly for a real drop pitch (no leftover required placeholders)', () => {
+    const pitch = SCOUT_DROPS[0].pitches[0];
+    const prompt = scout.buildImagePrompt(pitch, gameConfig.SCOUT_IMAGES.prompt_template, {
+      game_name: gameConfig.GAME.name,
+      visual_direction: gameConfig.SCOUT_IDEATION.visual_direction,
+    });
+    assert.ok(prompt.length > 0);
+    for (const leftover of ['{seed_a}', '{seed_b}', '{slot}', '{title}', '{tags}', '{description}', '{game_name}', '{visual_direction}']) {
+      assert.ok(!prompt.includes(leftover), `unfilled ${leftover} in: ${prompt}`);
+    }
+    assert.ok(prompt.includes(pitch.item_slot));
+    assert.ok(prompt.includes(pitch.inspiration.sources[0]));
+    assert.ok(prompt.includes(pitch.inspiration.sources[1]));
+  });
+});
+
+describe('validate-drops — image rules (SCOUT_IMAGES-gated)', () => {
+  const IMAGES_ON = {
+    enabled: true,
+    generator: 'nanobanana',
+    asset_dir: 'assets/scout-art/',
+    prompt_template: 'x {seed_a} {seed_b} {slot}',
+  };
+  const IMAGES_OFF = { ...IMAGES_ON, enabled: false };
+
+  // A validator-clean scout carrying a well-formed generated image.
+  function imagedScout(id, over = {}) {
+    const base = validScout(id);
+    return {
+      ...base,
+      image_url: `assets/scout-art/${base.id}.png`,
+      image_gen: {
+        prompt:
+          `Concept art for a ${base.item_slot} cosmetic. Fuse Dockworker canvas ` +
+          'gear and Brass shipfitting hardware. Plain backdrop, no text.',
+        generator: 'nanobanana',
+        generated_at: '2026-07-01T00:00:00.000Z',
+      },
+      ...over,
+    };
+  }
+
+  const imageProblemsOf = (pitch, images) =>
+    validateDrop(drop([pitch]), [], VOCAB, undefined, images).filter((p) =>
+      p.includes('image')
+    );
+
+  test('a well-formed generated image passes when images are enabled', () => {
+    assert.deepEqual(imageProblemsOf(imagedScout('ok'), IMAGES_ON), []);
+  });
+
+  test('any image while SCOUT_IMAGES.enabled is false is rejected (the default posture)', () => {
+    const problems = imageProblemsOf(imagedScout('gated'), IMAGES_OFF);
+    assert.ok(problems.some((p) => p.includes('SCOUT_IMAGES.enabled')), problems.join('\n'));
+    // And the shipped config default keeps the pre-image contract intact.
+    const shipped = imageProblemsOf(imagedScout('shipped'), undefined);
+    assert.equal(shipped.length > 0, !gameConfig.SCOUT_IMAGES.enabled);
+  });
+
+  test('external URLs are rejected even when enabled (zero external assets)', () => {
+    const bad = imagedScout('ext', { image_url: 'https://cdn.example.com/x.png' });
+    const problems = imageProblemsOf(bad, IMAGES_ON);
+    assert.ok(problems.some((p) => p.includes('external URL')), problems.join('\n'));
+  });
+
+  test('file naming is pitch-id-exact; data:image URIs are accepted', () => {
+    const misnamed = imagedScout('name', { image_url: 'assets/scout-art/whatever.png' });
+    assert.ok(imageProblemsOf(misnamed, IMAGES_ON).some((p) => p.includes('<pitch-id>')));
+    const dataUri = imagedScout('data', { image_url: 'data:image/png;base64,AAAA' });
+    assert.deepEqual(imageProblemsOf(dataUri, IMAGES_ON), []);
+  });
+
+  test('image_gen provenance is required and its prompt must cite both seeds + the slot', () => {
+    const bare = imagedScout('bare');
+    delete bare.image_gen;
+    assert.ok(imageProblemsOf(bare, IMAGES_ON).some((p) => p.includes('provenance required')));
+
+    const unseeded = imagedScout('unseeded');
+    unseeded.image_gen = { ...unseeded.image_gen, prompt: 'A nice Character Skin painting.' };
+    const problems = imageProblemsOf(unseeded, IMAGES_ON);
+    assert.ok(problems.some((p) => p.includes('must cite seed')), problems.join('\n'));
+
+    const slotless = imagedScout('slotless');
+    slotless.image_gen = {
+      ...slotless.image_gen,
+      prompt: 'Fuse Dockworker canvas gear and Brass shipfitting hardware.',
+    };
+    assert.ok(imageProblemsOf(slotless, IMAGES_ON).some((p) => p.includes('item_slot')));
+  });
+
+  test('the banned lexicon bites image prompts too', () => {
+    const sloppy = imagedScout('slop');
+    sloppy.image_gen = {
+      ...sloppy.image_gen,
+      prompt: sloppy.image_gen.prompt + ' Make it ethereal.',
+    };
+    const problems = imageProblemsOf(sloppy, IMAGES_ON);
+    assert.ok(problems.some((p) => p.includes('banned lexicon: "ethereal"')), problems.join('\n'));
+  });
+
+  test("stray image_gen on an image-less pitch is rejected; missing files are caught by the CLI's asset check", () => {
+    const stray = validScout('stray', { image_gen: { prompt: 'x', generator: 'y' } });
+    assert.ok(imageProblemsOf(stray, IMAGES_ON).some((p) => p.includes('stray')));
+
+    const ghost = imagedScout('ghost');
+    const missing = validateImageAssets([drop([ghost])], () => false);
+    assert.ok(missing.some((p) => p.includes('not a committed file')), missing.join('\n'));
+    assert.deepEqual(validateImageAssets([drop([ghost])], () => true), []);
+    // ''/data:/external URLs never hit the filesystem check.
+    const skipped = validateImageAssets(
+      [drop([validScout('plain'), imagedScout('durl', { image_url: 'data:image/png;base64,AA' })])],
+      () => false
+    );
+    assert.deepEqual(skipped, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 6b. game-config — the bundled config passes its own validator
 // ---------------------------------------------------------------------------
 
@@ -405,6 +570,29 @@ describe('game-config.js — the bundled config passes validate-config', () => {
     assert.ok(problems.some((p) => p.includes('unique')), 'tag uniqueness checked');
     assert.ok(problems.some((p) => p.includes('SCOUT_POOL_SHARE')), 'share range checked');
     assert.ok(problems.some((p) => p.includes('visual_direction')), 'ideation checked');
+  });
+
+  test('SCOUT_IMAGES contract: required placeholders, sane asset_dir, boolean gate', () => {
+    const broken = {
+      ...gameConfig,
+      SCOUT_IMAGES: {
+        enabled: 'yes',
+        generator: '',
+        asset_dir: '/absolute/../sketchy',
+        prompt_template: 'a prompt with only {slot}',
+      },
+    };
+    const problems = validateConfig(broken);
+    assert.ok(problems.some((p) => p.includes('SCOUT_IMAGES.enabled')), 'boolean gate checked');
+    assert.ok(problems.some((p) => p.includes('SCOUT_IMAGES.generator')), 'generator hint checked');
+    assert.ok(problems.some((p) => p.includes('SCOUT_IMAGES.asset_dir')), 'asset dir checked');
+    assert.ok(
+      problems.some((p) => p.includes('{seed_a}')) && problems.some((p) => p.includes('{seed_b}')),
+      'seed placeholders required'
+    );
+    // Missing block entirely is also loud (adaptation safety).
+    const absent = { ...gameConfig, SCOUT_IMAGES: undefined };
+    assert.ok(validateConfig(absent).some((p) => p.includes('SCOUT_IMAGES')));
   });
 });
 

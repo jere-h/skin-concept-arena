@@ -20,6 +20,13 @@ the routine never merges its own work.
 2. Paste the prompt below as the routine's prompt, verbatim.
 3. Merge or close each drop PR before the next firing — the prompt's first
    step makes the routine stand down while a drop PR is still open (the valve).
+4. OPTIONAL — concept images: to have drops ship AI concept art, flip
+   `game-config.js` `SCOUT_IMAGES.enabled` to `true` AND attach an
+   image-generation MCP server (e.g. Nano Banana) to the routine's session /
+   environment. Both are required; with either missing the routine simply
+   ships text-only drops (STEP 4b degrades to a no-op). The image prompt is
+   templatized in `SCOUT_IMAGES.prompt_template` — tune the template, and
+   every future drop's images tune with it, same as the ideation direction.
 
 ## The routine prompt
 
@@ -38,9 +45,10 @@ time. Open PRs on other branches are NOT yours to worry about; proceed.
 
 STEP 1 — absorb the contract. Read, in this order:
   - game-config.js (the game context: GAME identity, ITEM_SLOTS and
-    THEME_TAGS — your ONLY allowed vocabulary — and SCOUT_IDEATION, your
+    THEME_TAGS — your ONLY allowed vocabulary — SCOUT_IDEATION, your
     creative contract: visual_direction and off_limits are binding on every
-    candidate, seed_guidance governs how you use the atlas)
+    candidate, seed_guidance governs how you use the atlas — and
+    SCOUT_IMAGES, which decides whether STEP 4b applies to this run)
   - docs/scout-pipeline-tech-spec.md (section 4 is your contract)
   - scripts/seed-atlas.json (your only source of inspiration seeds)
   - scout-data.js (every prior drop — you must not resemble or edit them)
@@ -62,7 +70,9 @@ material or real-world referent; describe silhouette and the one moment the
 concept shines in-game; end grounded with a restraint clause in the spirit
 of "reads as guardian, not villain"; no adjective stacks, nothing from the
 banned lexicon in scripts/validate-drops.mjs (which already includes the
-game's banned_lexicon_extra), no AI-image talk — image_url is always ''.
+game's banned_lexicon_extra), no AI-image talk in the COPY — image_url is
+'' at this stage regardless of SCOUT_IMAGES (images, if any, come in STEP
+4b, after the cull).
 
 STEP 3 — cull hard. Score every candidate 1–5 on: concrete visualizability,
 silhouette readability at gameplay distance, producibility by a real art
@@ -91,6 +101,32 @@ finished pitch; count and citations are validated too). Optionally append
 strong territories missing from it — appended entries must use the config
 vocabulary in their affinity lists (validated).
 
+STEP 4b — concept images (OPTIONAL; skip silently unless BOTH hold):
+game-config.js SCOUT_IMAGES.enabled is true, AND an image-generation MCP
+tool is available in your session (look for the server SCOUT_IMAGES.generator
+names, e.g. nanobanana; any MCP that returns an image file works). When both
+hold, for each shipped pitch — never for culled candidates:
+  1. Build the prompt with the repo's own template filler; do not freehand:
+       node -e "import('./scout.js').then(async (s) => {
+         const g = await import('./game-config.js');
+         const pitch = /* the pitch object */;
+         console.log(s.buildImagePrompt(pitch, g.SCOUT_IMAGES.prompt_template,
+           { game_name: g.GAME.name,
+             visual_direction: g.SCOUT_IDEATION.visual_direction }));
+       })"
+  2. Call the image MCP with that prompt, one image per pitch. Save the
+     file as SCOUT_IMAGES.asset_dir + '<pitch-id>.png' (or the actual
+     format returned: jpg/jpeg/webp/svg).
+  3. On the pitch, set image_url to that repo-relative path and add
+     image_gen: { prompt: <the exact filled prompt from step 1>,
+     generator: <the MCP/model you called>, generated_at: <now ISO> }.
+  4. Eyeball each image against SCOUT_IDEATION.visual_direction and
+     off_limits. An off-direction, text-bearing, or watermarked image is
+     stripped, not shipped: keep the pitch, set image_url back to ''.
+Any failure here (MCP missing, generation error, unsure) degrades to
+image_url '' — images never block or delay a drop, and a drop with no
+images is a fully valid drop.
+
 STEP 5 — validate mechanically. Run the canonical gate (the same command
 CI runs on your PR):
   node scripts/gate.mjs
@@ -98,10 +134,11 @@ Fix and re-run until it exits 0. Do not weaken a rule, the
 validator, or a test to get there — if a concept can't pass, cut it and
 promote the next-best candidate.
 
-STEP 6 — open the PR. Branch scout/drop-NNN, commit scout-data.js (and the
-atlas if touched), push, open a PR titled "Scout drop NNN: <the drop's range
-in 3-5 words>". PR body: a table of shipped concepts (title, slot, tags, the
-two seeds), the cull ratio with one line on WHY the strongest kills were
+STEP 6 — open the PR. Branch scout/drop-NNN, commit scout-data.js (plus the
+atlas if touched, plus any STEP 4b images under SCOUT_IMAGES.asset_dir),
+push, open a PR titled "Scout drop NNN: <the drop's range in 3-5 words>".
+PR body: a table of shipped concepts (title, slot, tags, the two seeds,
+image yes/no), the cull ratio with one line on WHY the strongest kills were
 killed, and which feedback exemplars (if any) steered you. Do not merge. Do
 not push to main. Your PR is done when it is OPEN and its CI check (the same
 gate you ran in STEP 5) is green; end the run then.
@@ -113,9 +150,17 @@ gate you ran in STEP 5) is green; end the run then.
   routine to re-read the contract from the repo — the spec, validator, and
   atlas stay the single source of truth, so tightening a rule in-repo
   tightens every future drop with no prompt change.
-- **The routine writes data, not code.** It touches `scout-data.js` and
-  (append-only) the atlas. App behavior changes go through normal
+- **The routine writes data, not code.** It touches `scout-data.js`,
+  (append-only) the atlas, and — when images are enabled — new files under
+  `SCOUT_IMAGES.asset_dir`. App behavior changes go through normal
   development, not the routine.
+- **Images are doubly gated**: the config flag (a code-reviewed change) and
+  the MCP being attached (an operator action). The prompt is never
+  freehanded — `scout.buildImagePrompt` fills the committed template from
+  each pitch's two seeds and its slot, the shipped `image_gen.prompt` is
+  validated to cite them, and the human PR gate reviews the images
+  themselves. An image that misses the direction is stripped, not shipped;
+  the concept survives on placeholder art.
 - **The feedback loop is manual by architecture**: votes are device-local, so
   the Studio's "Export feedback JSON" file, committed to `feedback/`, is how
   Arena performance reaches the next generation run. No feedback file simply
