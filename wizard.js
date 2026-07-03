@@ -47,33 +47,12 @@ function allSparks() {
   return sparks;
 }
 
-// Fixed item slots for the seeded game. A select needs a real default so
-// item_slot is never empty (finding 3) — the first option is pre-selected.
-// Exported (with THEME_TAGS) as the app's authoritative vocabulary: the scout
-// drop validator and the drop-authoring routine must use these exact lists.
-export const ITEM_SLOTS = [
-  'Character Skin',
-  'Weapon Skin',
-  'Headgear',
-  'Back Bling / Cape',
-  'Emote',
-  'Mount',
-  'Loading Screen',
-];
-
-// Fixed theme palette: 7 distinct TONALITIES (how a skin feels, not what
-// genre it borrows), so any concept — from any setting — can be tagged by
-// vibe. Toggle chips only — no free-text entry (finding 4).
-// Exported — see ITEM_SLOTS above.
-export const THEME_TAGS = [
-  'Cute',
-  'Badass',
-  'Elegant',
-  'Creepy',
-  'Goofy',
-  'Gritty',
-  'Dreamy',
-];
+// The cosmetic vocabulary — item slots and tonality tags — lives in
+// game-config.js (GAME-ADAPT: edit it there, never here). The select needs a
+// real default so item_slot is never empty (finding 3): the FIRST configured
+// slot is pre-selected. Tags render as toggle chips only — no free-text
+// entry (finding 4).
+import { ITEM_SLOTS, THEME_TAGS } from './game-config.js';
 
 function escapeHtml(value) {
   return String(value == null ? '' : value)

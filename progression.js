@@ -66,15 +66,19 @@ export const RANK_LADDER = [
   { id: 'legend', min: 250 },
 ];
 
-// The wizard's fixed ITEM_SLOTS list has 7 entries (see wizard.js). The Full
-// Loadout badge needs that total without importing a DOM view module, so the
-// count is duplicated here on purpose — keep the two in sync.
-const FULL_LOADOUT_SLOT_COUNT = 7;
+// Coverage-badge thresholds DERIVE from the configured cosmetic vocabulary
+// (game-config.js is pure data, so importing it here keeps this module free
+// of DOM views and of ranking — the access split is untouched). Full Loadout
+// requires every configured slot; Theme Explorer requires 6 distinct tags,
+// or the whole palette when a game configures fewer than 6. Exported so the
+// tests assert against the same derivation instead of re-hardcoding counts.
+import { ITEM_SLOTS, THEME_TAGS } from './game-config.js';
 
-// Distinct-tag floor for Theme Explorer and distinct-vote-day floor for the
-// retrospective streak badge (the whole daily-streak system was cut to this
-// one badge — see the PRD filter table).
-const THEME_EXPLORER_TAGS = 6;
+export const FULL_LOADOUT_SLOT_COUNT = Math.max(1, ITEM_SLOTS.length);
+export const THEME_EXPLORER_TAGS = Math.max(1, Math.min(6, THEME_TAGS.length));
+
+// Distinct-vote-day floor for the retrospective streak badge (the whole
+// daily-streak system was cut to this one badge — see the PRD filter table).
 const DEDICATED_VOTE_DAYS = 3;
 
 // --- small defensive helpers -------------------------------------------------
@@ -151,7 +155,9 @@ export const BADGES = [
     id: 'theme-explorer',
     family: 'coverage',
     label: 'Theme Explorer',
-    blurb: 'Use 6 or more distinct theme tags across your pitches.',
+    blurb:
+      'Use ' + THEME_EXPLORER_TAGS + ' or more distinct theme tags across ' +
+      'your pitches.',
     test: (ctx) => safeCount(ctx && ctx.distinctTags) >= THEME_EXPLORER_TAGS,
   },
   // -- performance: tests PEAK tiers (and calibration), never live tiers -------

@@ -7,7 +7,7 @@
 // called here and nowhere in those paths.
 //
 // checkPassphrase(input) compares the input against the STUDIO_PASSPHRASE constant
-// (the single source of truth lives in app.js). A correct passphrase reveals the
+// (the single source of truth lives in game-config.js). A correct passphrase reveals the
 // ranking.rank leaderboard: a table with tabular numeric columns (comparison
 // count + win-rate, plus a thin decorative win-rate bar per row) and a neutral
 // 'needs more votes' icon+label chip on each below-threshold row
@@ -18,7 +18,7 @@
 // (explicit non-goal): anyone reading the bundle can find it. It only keeps rank
 // out of the submitter/voter surface by default, matching the product's intent.
 
-import { STUDIO_PASSPHRASE, GAME, COMPARISON_THRESHOLD } from './app.js';
+import { STUDIO_PASSPHRASE, GAME, COMPARISON_THRESHOLD } from './game-config.js';
 // Pure bundled data for the scout report panel (drop provenance + cull
 // stats). No logic crosses this import; studio.js remains the only caller of
 // ranking.rank and still never imports progression.

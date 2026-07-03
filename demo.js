@@ -41,6 +41,13 @@ const DEMO_PROFILE = Object.freeze({
   created_at: '2026-06-10T08:00:00.000Z',
 });
 
+// GAME-ADAPT: the four DEMO_PITCHES below are Emberhold-flavored — rewrite
+// their titles/descriptions/slots/tags for a new game (use game-config.js
+// ITEM_SLOTS / THEME_TAGS; keep the ids, the vote wiring, and the tier
+// spread — one Diamond, one Gold, one Silver, one calibrating — so the demo
+// Locker still demonstrates every progression surface). See
+// docs/adapt-to-a-new-game.md step 5.
+//
 // Compact inline-SVG thumbnails (same discipline as sample-data.js: neutrals
 // + the single ember accent only, no external URLs).
 const THUMB_REAPER =

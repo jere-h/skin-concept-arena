@@ -5,6 +5,13 @@ scheduled Claude Code session that authors the next drop, validates it
 mechanically, and opens a PR. A human merging that PR is the editorial gate —
 the routine never merges its own work.
 
+> GAME-ADAPT: the prompt below names this repo (`jere-h/skin-concept-arena`).
+> When adapting to a new game, re-issue the routine with the new repo slug —
+> nothing else in the prompt is game-specific, because all game context
+> (identity, vocabulary, ideation direction) is read from `game-config.js`
+> at run time. Tighten the game's direction there, and every future drop
+> tightens with it.
+
 ## Setup
 
 1. In Claude Code (claude.ai/code), create a session on
@@ -28,11 +35,14 @@ open, stop: comment nothing, change nothing, end the run. One drop in review
 at a time.
 
 STEP 1 — absorb the contract. Read, in this order:
+  - game-config.js (the game context: GAME identity, ITEM_SLOTS and
+    THEME_TAGS — your ONLY allowed vocabulary — and SCOUT_IDEATION, your
+    creative contract: visual_direction and off_limits are binding on every
+    candidate, seed_guidance governs how you use the atlas)
   - docs/scout-pipeline-tech-spec.md (section 4 is your contract)
   - scripts/seed-atlas.json (your only source of inspiration seeds)
   - scout-data.js (every prior drop — you must not resemble or edit them)
   - sample-data.js and demo.js DEMO_PITCHES (more text you must not resemble)
-  - wizard.js ITEM_SLOTS and THEME_TAGS (your only allowed vocabulary)
   - feedback/ (if the directory exists: arena-feedback.json files are studio
     exports — scouts with high win_rate and the top_human pitches are your
     positive style exemplars; low-win-rate or fast-retired scouts are your
@@ -41,14 +51,15 @@ STEP 1 — absorb the contract. Read, in this order:
 
 STEP 2 — generate wide. Draft at least 20 candidate concepts. Every candidate
 fuses exactly TWO seeds from the atlas — the concept must be unimaginable
-without both. Do not reuse a seed used in either of the two most recent
-drops. Spread candidates across item slots and tonality tags. House voice,
-non-negotiable: 2–3 sentences; name at least one concrete material or
-real-world referent; describe silhouette and the one moment the concept
-shines in-game; end grounded with a restraint clause in the spirit of "reads
-as guardian, not villain"; no adjective stacks, nothing from the banned
-lexicon in scripts/validate-drops.mjs, no AI-image talk — image_url is
-always ''.
+without both — and sits INSIDE game-config.js SCOUT_IDEATION.visual_direction
+while touching nothing in off_limits. Do not reuse a seed used in either of
+the two most recent drops. Spread candidates across item slots and tonality
+tags. House voice, non-negotiable: 2–3 sentences; name at least one concrete
+material or real-world referent; describe silhouette and the one moment the
+concept shines in-game; end grounded with a restraint clause in the spirit
+of "reads as guardian, not villain"; no adjective stacks, nothing from the
+banned lexicon in scripts/validate-drops.mjs (which already includes the
+game's banned_lexicon_extra), no AI-image talk — image_url is always ''.
 
 STEP 3 — cull hard. Score every candidate 1–5 on: concrete visualizability,
 silhouette readability at gameplay distance, producibility by a real art

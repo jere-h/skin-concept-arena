@@ -1,7 +1,7 @@
 // app.js — Skin Concept Arena entry module.
 //
-// Defines the single source of truth for the run-wide constants (GAME,
-// STUDIO_PASSPHRASE, COMPARISON_THRESHOLD), wires the quiet tab nav / view
+// Consumes the run-wide constants from game-config.js (the single source of
+// truth for all game-specific values), wires the quiet tab nav / view
 // switcher, guarantees the shared store is seeded on first load, ensures the
 // device-local creator profile exists, sets up the shared
 // IntersectionObserver entrance animation, and boots the four view
@@ -30,36 +30,18 @@ import { initTutorial } from './tutorial.js';
 import * as scout from './scout.js';
 import { SCOUT_DROPS } from './scout-data.js';
 
-// --- Run-wide constants (one source of truth) -----------------------------
-
-// Fixed single-game context. Shown as context in the UI; NOT stored per pitch.
-export const GAME = Object.freeze({
-  id: 'emberhold',
-  name: 'Emberhold',
-});
-
-// Documented client-side gate for the Studio leaderboard. This is convenience,
-// NOT security (explicit non-goal): it lives in source and is trivially
-// discoverable. studio.js reads this same constant.
-export const STUDIO_PASSPHRASE = 'emberhold-studio';
-
-// A pitch needs at least this many comparisons before its win-rate is treated
-// as meaningful; below it the leaderboard flags the row as "needs more votes".
-export const COMPARISON_THRESHOLD = 5;
-
-// --- Scout pipeline constants (docs/scout-pipeline-tech-spec.md) ------------
-
-// Max fraction of the served Arena pool that may be scout concepts. The cap
-// (and the one-scout-per-pair rule) stands down when fewer than two human
-// pitches remain — scouts keep the Arena alive rather than letting it empty.
-export const SCOUT_POOL_SHARE = 0.4;
-
-// Rolling freshness window: only the newest K scout concepts stay in Arena
-// rotation; older ones are flagged retired (never deleted) at boot. Kept at
-// the share cap's real capacity against the seeded 6-pitch human pool
-// (floor(6 * 0.4 / 0.6) = 4) so an "active" scout is never share-capped into
-// a limbo where it can neither battle nor retire.
-export const SCOUT_WINDOW_K = 4;
+// --- Run-wide constants ------------------------------------------------------
+//
+// All game-specific values live in game-config.js (the single source of
+// truth for game identity, vocabulary, and tuning — see GAME-ADAPT markers
+// there). This module only consumes them.
+import {
+  GAME,
+  STUDIO_PASSPHRASE,
+  COMPARISON_THRESHOLD,
+  SCOUT_POOL_SHARE,
+  SCOUT_WINDOW_K,
+} from './game-config.js';
 
 // --- View / tab switching --------------------------------------------------
 

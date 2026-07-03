@@ -1159,15 +1159,21 @@ describe('progression.earnedBadges — family predicates on synthetic ctx', () =
     assert.deepEqual(at(6), ['first-pitch', 'three-pitches', 'six-pitches']);
   });
 
-  test('coverage: Full Loadout needs every item slot, Theme Explorer 6 distinct tags', async () => {
+  test('coverage: Full Loadout needs every configured slot, Theme Explorer its tag floor', async () => {
     const progression = await import('../progression.js');
-    // The wizard's fixed ITEM_SLOTS list has 7 entries (cross-referenced in
-    // progression.js); 6 of 7 slots is not a full loadout.
-    assert.ok(!progression.earnedBadges(makeCtx({ distinctSlots: 6 })).includes('full-loadout'));
-    assert.ok(progression.earnedBadges(makeCtx({ distinctSlots: 7 })).includes('full-loadout'));
+    const config = await import('../game-config.js');
+    // Both thresholds DERIVE from game-config.js vocabulary (exported by
+    // progression.js so this test can never drift from the real derivation):
+    // one-short-of-every-slot is not a full loadout, every slot is.
+    const slots = progression.FULL_LOADOUT_SLOT_COUNT;
+    assert.equal(slots, config.ITEM_SLOTS.length, 'slot threshold tracks the config');
+    assert.ok(!progression.earnedBadges(makeCtx({ distinctSlots: slots - 1 })).includes('full-loadout'));
+    assert.ok(progression.earnedBadges(makeCtx({ distinctSlots: slots })).includes('full-loadout'));
 
-    assert.ok(!progression.earnedBadges(makeCtx({ distinctTags: 5 })).includes('theme-explorer'));
-    assert.ok(progression.earnedBadges(makeCtx({ distinctTags: 6 })).includes('theme-explorer'));
+    const tagFloor = progression.THEME_EXPLORER_TAGS;
+    assert.equal(tagFloor, Math.min(6, config.THEME_TAGS.length), 'tag floor tracks the config');
+    assert.ok(!progression.earnedBadges(makeCtx({ distinctTags: tagFloor - 1 })).includes('theme-explorer'));
+    assert.ok(progression.earnedBadges(makeCtx({ distinctTags: tagFloor })).includes('theme-explorer'));
   });
 
   test('performance: Battle-Tested on the first calibrated pitch; medals on peaks', async () => {
@@ -1637,9 +1643,9 @@ describe('access-split guard, extended — static import-graph assertions', () =
   }
 
   test('wizard.js and arena.js import neither ranking nor progression', () => {
-    // scout.js / scout-data.js feed the participant-facing Arena and Submit
-    // views, so they are held to the same bar as the views themselves.
-    for (const name of ['wizard.js', 'arena.js', 'scout.js', 'scout-data.js']) {
+    // scout.js / scout-data.js / game-config.js feed the participant-facing
+    // Arena and Submit views, so they are held to the same bar as the views.
+    for (const name of ['wizard.js', 'arena.js', 'scout.js', 'scout-data.js', 'game-config.js']) {
       for (const spec of importSpecifiers(name)) {
         assert.ok(
           !/ranking/.test(spec),
@@ -1688,6 +1694,7 @@ describe('access-split guard, extended — static import-graph assertions', () =
       'sample-data.js',
       'scout.js',
       'scout-data.js',
+      'game-config.js',
       'ids.js',
       'art.js',
     ];
