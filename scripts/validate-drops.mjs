@@ -21,7 +21,7 @@ import { SAMPLE_PITCHES } from '../sample-data.js';
 import { DEMO_PITCHES } from '../demo.js';
 // The game's cosmetic vocabulary and per-game lexicon additions come from
 // game-config.js — the single game-context source (GAME-ADAPT lives there).
-import { ITEM_SLOTS, THEME_TAGS, SCOUT_IDEATION } from '../game-config.js';
+import { ITEM_SLOTS, THEME_TAGS, SCOUT_IDEATION, PITCH_LIMITS } from '../game-config.js';
 
 // --- The mechanical style rules --------------------------------------------
 
@@ -69,9 +69,11 @@ export const BANNED_LEXICON = BANNED_LEXICON_BASE.concat(
     .map((phrase) => phrase.toLowerCase())
 );
 
-export const TITLE_MAX = 80; // wizard input maxlength parity
-export const DESC_MAX = 600; // wizard textarea maxlength parity
-export const DESC_MIN = 80; // substance floor: no one-liner slop
+// Length caps come from game-config.js PITCH_LIMITS — the same constants the
+// wizard renders as input maxlengths, so human and AI text share one cap.
+export const TITLE_MAX = PITCH_LIMITS.title_max;
+export const DESC_MAX = PITCH_LIMITS.description_max;
+export const DESC_MIN = 80; // substance floor: no one-liner slop (anti-slop, not game pref)
 export const MAX_SENTENCES = 3;
 export const MAX_PER_ACTIVE_DATE = 2; // stagger rule within a drop
 export const SIMILARITY_LIMIT = 0.4; // token-Jaccard ceiling vs any other pitch
@@ -287,6 +289,19 @@ export function validateDrop(drop, priorPitches, vocab) {
 export function validateAll(drops, samplePitches, vocab) {
   const problems = [];
   const list = Array.isArray(drops) ? drops : [];
+
+  // Drop ids: unique and 'drop-NNN'-shaped (the routine's increment contract
+  // — docs/scout-routine.md STEP 4 — made mechanical).
+  const seenDropIds = new Set();
+  for (const drop of list) {
+    const dropId = drop && drop.drop_id;
+    if (typeof dropId !== 'string') continue; // shape error reported per-drop below
+    if (seenDropIds.has(dropId)) problems.push(`duplicate drop_id: ${dropId}`);
+    seenDropIds.add(dropId);
+    if (!/^drop-\d{3,}$/.test(dropId)) {
+      problems.push(`drop_id "${dropId}" must match drop-NNN (zero-padded number, e.g. drop-002)`);
+    }
+  }
 
   // Global id uniqueness across every drop.
   const seenIds = new Set();

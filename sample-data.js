@@ -5,9 +5,8 @@
 // Keep the same shapes and roughly the same counts (6 pitches / 16 votes:
 // enough that every view demos itself, two pitches deliberately under the
 // comparison threshold). Write new samples using game-config.js ITEM_SLOTS /
-// THEME_TAGS exactly. (These legacy Emberhold samples predate the canonical
-// slot list — art.js keyword-matches them fine, but new games should not
-// copy that quirk.)
+// THEME_TAGS exactly — `node scripts/validate-data.mjs` checks vote wiring
+// and warns on vocabulary drift.
 //
 // Bundled EXAMPLE data for Skin Concept Arena. store.js seeds these two arrays
 // the first time the app loads (when the 'sca.pitches.v1' / 'sca.votes.v1'
@@ -39,7 +38,7 @@ const THUMB_GLASSWING =
 export const SAMPLE_PITCHES = [
   {
     id: "sample-thornwarden",
-    item_slot: "Outfit",
+    item_slot: "Character Skin",
     theme_tags: ["Badass", "Gritty"],
     title: "Thornwarden Regalia",
     description:
@@ -49,7 +48,7 @@ export const SAMPLE_PITCHES = [
   },
   {
     id: "sample-tidecaller",
-    item_slot: "Weapon",
+    item_slot: "Weapon Skin",
     theme_tags: ["Elegant", "Gritty"],
     title: "Tidecaller Longbow",
     description:
@@ -59,7 +58,7 @@ export const SAMPLE_PITCHES = [
   },
   {
     id: "sample-halcyon",
-    item_slot: "Back Accessory",
+    item_slot: "Back Bling / Cape",
     theme_tags: ["Dreamy", "Elegant"],
     title: "Halcyon Orbit",
     description:
@@ -69,7 +68,7 @@ export const SAMPLE_PITCHES = [
   },
   {
     id: "sample-emberforge",
-    item_slot: "Weapon",
+    item_slot: "Weapon Skin",
     theme_tags: ["Badass", "Gritty"],
     title: "Emberforge Maul",
     description:
@@ -89,7 +88,7 @@ export const SAMPLE_PITCHES = [
   },
   {
     id: "sample-nocturne",
-    item_slot: "Victory Pose",
+    item_slot: "Emote",
     theme_tags: ["Elegant", "Creepy"],
     title: "Nocturne Bow",
     description:

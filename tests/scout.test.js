@@ -34,6 +34,9 @@ import {
   sentenceCount,
 } from '../scripts/validate-drops.mjs';
 import { validateConfig } from '../scripts/validate-config.mjs';
+import { validateAllData, validateVotes } from '../scripts/validate-data.mjs';
+import { SAMPLE_VOTES } from '../sample-data.js';
+import { DEMO_VOTES, DEMO_PROFILE_ID } from '../demo.js';
 
 const VOCAB = { slots: ITEM_SLOTS, tags: THEME_TAGS };
 const NOW = '2026-07-10T12:00:00.000Z';
@@ -373,6 +376,18 @@ describe('game-config.js — the bundled config passes validate-config', () => {
     assert.deepEqual(problems, []);
   });
 
+  test('capacity warning fires when the window exceeds the share cap (R5, mechanical)', () => {
+    const oversized = { ...gameConfig, SCOUT_WINDOW_K: 40 };
+    const problems = validateConfig(oversized, { samplePitchCount: 6 });
+    assert.ok(
+      problems.some((p) => p.startsWith('WARNING') && p.includes('SCOUT_WINDOW_K')),
+      problems.join('\n')
+    );
+    // The shipped config is within capacity: no warning.
+    const clean = validateConfig(gameConfig, { samplePitchCount: 6 });
+    assert.ok(!clean.some((p) => p.includes('SCOUT_WINDOW_K')));
+  });
+
   test('the validator has teeth: broken configs are rejected', () => {
     const broken = {
       ...gameConfig,
@@ -388,6 +403,53 @@ describe('game-config.js — the bundled config passes validate-config', () => {
     assert.ok(problems.some((p) => p.includes('unique')), 'tag uniqueness checked');
     assert.ok(problems.some((p) => p.includes('SCOUT_POOL_SHARE')), 'share range checked');
     assert.ok(problems.some((p) => p.includes('visual_direction')), 'ideation checked');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6c. Bundled data — the shipped samples/demo pass the integrity validator
+// ---------------------------------------------------------------------------
+
+describe('validate-data — bundled sample/demo integrity', () => {
+  const shipped = {
+    samplePitches: SAMPLE_PITCHES,
+    sampleVotes: SAMPLE_VOTES,
+    demoPitches: DEMO_PITCHES,
+    demoVotes: DEMO_VOTES,
+    demoProfileId: DEMO_PROFILE_ID,
+    drops: SCOUT_DROPS,
+    vocab: { slots: ITEM_SLOTS, tags: THEME_TAGS },
+  };
+
+  test('the shipped data has zero fatal violations', () => {
+    const fatal = validateAllData(shipped).filter((p) => !p.startsWith('WARNING'));
+    assert.deepEqual(fatal, []);
+  });
+
+  test('broken vote wiring is caught (winner not a participant, orphan id, self-battle)', () => {
+    const known = new Set(['a', 'b']);
+    const bad = [
+      { id: 'v1', pitch_a_id: 'a', pitch_b_id: 'b', winner_id: 'c' },
+      { id: 'v2', pitch_a_id: 'a', pitch_b_id: 'ghost', winner_id: 'a' },
+      { id: 'v3', pitch_a_id: 'a', pitch_b_id: 'a', winner_id: 'a' },
+      { id: 'v1', pitch_a_id: 'b', pitch_b_id: 'a', winner_id: 'b' },
+    ];
+    const problems = validateVotes(bad, known, 'test vote');
+    assert.ok(problems.some((p) => p.includes('not one of the two participants')));
+    assert.ok(problems.some((p) => p.includes('not a bundled pitch')));
+    assert.ok(problems.some((p) => p.includes('cannot battle itself')));
+    assert.ok(problems.some((p) => p.includes('duplicate vote id')));
+  });
+
+  test('id collisions across samples, demo, and drops are caught', () => {
+    const clash = {
+      ...shipped,
+      demoPitches: DEMO_PITCHES.concat([
+        { ...DEMO_PITCHES[0], id: SAMPLE_PITCHES[0].id },
+      ]),
+    };
+    const problems = validateAllData(clash);
+    assert.ok(problems.some((p) => p.includes('duplicate pitch id')), problems.join('\n'));
   });
 });
 

@@ -76,6 +76,14 @@ export const THEME_TAGS = Object.freeze([
 // changing per game; raise it for high-traffic deployments.
 export const COMPARISON_THRESHOLD = 5;
 
+// Length caps for pitch text, enforced identically on humans (the Submit
+// wizard's input maxlengths) and on AI scouts (the drop validator) — one
+// constant so the two can never drift apart.
+export const PITCH_LIMITS = Object.freeze({
+  title_max: 80,
+  description_max: 600,
+});
+
 // --- Scout pipeline tuning -------------------------------------------------------
 
 // Max fraction of a served Arena pool that may be AI-scouted concepts. The

@@ -17,10 +17,14 @@ import {
   ITEM_SLOTS,
   THEME_TAGS,
   COMPARISON_THRESHOLD,
+  PITCH_LIMITS,
   SCOUT_POOL_SHARE,
   SCOUT_WINDOW_K,
   SCOUT_IDEATION,
 } from '../game-config.js';
+// Only for the operational capacity warning below (how many scouts the
+// share cap can actually serve against the seeded human pool).
+import { SAMPLE_PITCHES } from '../sample-data.js';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -43,8 +47,15 @@ function checkVocabList(problems, name, list, min) {
   }
 }
 
-/** Validate a game-config shape. Returns violation strings (empty = clean). */
-export function validateConfig(config) {
+/**
+ * Validate a game-config shape. Returns violation strings (empty = clean).
+ * Strings prefixed WARNING( are non-fatal advisories. `context` is optional
+ * operational data: { samplePitchCount } enables the scout-capacity check
+ * (the rev-3 R5 lesson from docs/scout-pipeline-tech-spec.md, made
+ * mechanical: an "active" scout the share cap can never serve is a scout
+ * that can neither battle nor retire).
+ */
+export function validateConfig(config, context = {}) {
   const problems = [];
   const c = config || {};
 
@@ -86,6 +97,41 @@ export function validateConfig(config) {
   if (!Number.isFinite(c.SCOUT_WINDOW_K) || c.SCOUT_WINDOW_K < 1) {
     problems.push('SCOUT_WINDOW_K must be a number >= 1 (rotation window)');
   }
+  const limits = c.PITCH_LIMITS || {};
+  if (
+    !Number.isFinite(limits.title_max) || limits.title_max < 10 ||
+    !Number.isFinite(limits.description_max) ||
+    limits.description_max <= limits.title_max
+  ) {
+    problems.push(
+      'PITCH_LIMITS needs title_max >= 10 and description_max > title_max ' +
+        '(rendered as wizard maxlengths AND enforced on scout drops)'
+    );
+  }
+
+  // Operational capacity (WARNING): with H seeded human pitches and share S,
+  // the Arena serves at most floor(H * S / (1 - S)) scouts at once. A window
+  // larger than that parks "active" scouts where they can neither battle nor
+  // retire, and the Scout report shows them at 0 comparisons forever.
+  const sampleCount = context.samplePitchCount;
+  if (
+    Number.isFinite(sampleCount) && sampleCount >= 2 &&
+    Number.isFinite(c.SCOUT_POOL_SHARE) && c.SCOUT_POOL_SHARE > 0 &&
+    c.SCOUT_POOL_SHARE < 1 && Number.isFinite(c.SCOUT_WINDOW_K)
+  ) {
+    const capacity = Math.max(
+      1,
+      Math.floor((sampleCount * c.SCOUT_POOL_SHARE) / (1 - c.SCOUT_POOL_SHARE))
+    );
+    if (c.SCOUT_WINDOW_K > capacity) {
+      problems.push(
+        `WARNING(non-fatal): SCOUT_WINDOW_K (${c.SCOUT_WINDOW_K}) exceeds the ` +
+          `share cap's capacity against the ${sampleCount}-pitch seeded pool ` +
+          `(${capacity}) — scouts beyond that stay "active" but are never ` +
+          'served until humans submit more pitches'
+      );
+    }
+  }
 
   // Scout ideation — the drop routine reads all of these; the drop validator
   // merges banned_lexicon_extra into its lexicon.
@@ -117,16 +163,20 @@ export function validateConfig(config) {
 import { pathToFileURL } from 'node:url';
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const problems = validateConfig({
-    GAME,
-    STUDIO_PASSPHRASE,
-    ITEM_SLOTS,
-    THEME_TAGS,
-    COMPARISON_THRESHOLD,
-    SCOUT_POOL_SHARE,
-    SCOUT_WINDOW_K,
-    SCOUT_IDEATION,
-  });
+  const problems = validateConfig(
+    {
+      GAME,
+      STUDIO_PASSPHRASE,
+      ITEM_SLOTS,
+      THEME_TAGS,
+      COMPARISON_THRESHOLD,
+      PITCH_LIMITS,
+      SCOUT_POOL_SHARE,
+      SCOUT_WINDOW_K,
+      SCOUT_IDEATION,
+    },
+    { samplePitchCount: Array.isArray(SAMPLE_PITCHES) ? SAMPLE_PITCHES.length : 0 }
+  );
   const fatal = problems.filter((p) => !p.startsWith('WARNING'));
   const warnings = problems.filter((p) => p.startsWith('WARNING'));
   for (const warning of warnings) console.warn(`  ! ${warning}`);

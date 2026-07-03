@@ -52,7 +52,7 @@ function allSparks() {
 // real default so item_slot is never empty (finding 3): the FIRST configured
 // slot is pre-selected. Tags render as toggle chips only — no free-text
 // entry (finding 4).
-import { ITEM_SLOTS, THEME_TAGS } from './game-config.js';
+import { ITEM_SLOTS, THEME_TAGS, PITCH_LIMITS } from './game-config.js';
 
 function escapeHtml(value) {
   return String(value == null ? '' : value)
@@ -141,12 +141,14 @@ function templateMarkup() {
         '<div class="field">' +
           '<label class="field-label" for="wizard-title">Title</label>' +
           '<input id="wizard-title" class="field-input" name="title" type="text" ' +
-            'maxlength="80" placeholder="e.g. Tidebreaker Vanguard" required>' +
+            'maxlength="' + PITCH_LIMITS.title_max + '" ' +
+            'placeholder="e.g. Tidebreaker Vanguard" required>' +
         '</div>' +
         '<div class="field">' +
           '<label class="field-label" for="wizard-desc">Description</label>' +
           '<textarea id="wizard-desc" class="field-input field-textarea" ' +
-            'name="description" rows="4" maxlength="600" ' +
+            'name="description" rows="4" ' +
+            'maxlength="' + PITCH_LIMITS.description_max + '" ' +
             'placeholder="What does it look like? Silhouette, palette, effects, ' +
             'the moment it shines." required></textarea>' +
         '</div>' +
