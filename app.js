@@ -27,6 +27,8 @@ import { initLocker, refreshLocker, checkCelebrations } from './locker.js';
 import { initStudio } from './studio.js';
 import * as demo from './demo.js';
 import { initTutorial } from './tutorial.js';
+import * as scout from './scout.js';
+import { SCOUT_DROPS } from './scout-data.js';
 
 // --- Run-wide constants (one source of truth) -----------------------------
 
@@ -44,6 +46,20 @@ export const STUDIO_PASSPHRASE = 'emberhold-studio';
 // A pitch needs at least this many comparisons before its win-rate is treated
 // as meaningful; below it the leaderboard flags the row as "needs more votes".
 export const COMPARISON_THRESHOLD = 5;
+
+// --- Scout pipeline constants (docs/scout-pipeline-tech-spec.md) ------------
+
+// Max fraction of the served Arena pool that may be scout concepts. The cap
+// (and the one-scout-per-pair rule) stands down when fewer than two human
+// pitches remain — scouts keep the Arena alive rather than letting it empty.
+export const SCOUT_POOL_SHARE = 0.4;
+
+// Rolling freshness window: only the newest K scout concepts stay in Arena
+// rotation; older ones are flagged retired (never deleted) at boot. Kept at
+// the share cap's real capacity against the seeded 6-pitch human pool
+// (floor(6 * 0.4 / 0.6) = 4) so an "active" scout is never share-capped into
+// a limbo where it can neither battle nor retire.
+export const SCOUT_WINDOW_K = 4;
 
 // --- View / tab switching --------------------------------------------------
 
@@ -425,9 +441,14 @@ function bootViews(activeProfile) {
     });
   }
   if (arenaEl) {
+    // scout + scoutShare meter the AI-scouted concepts (retired filter, pool
+    // share cap, one-scout-per-pair). scout.js carries no score/rank surface,
+    // so the access split is untouched.
     initArena(arenaEl, {
       store,
       sampler,
+      scout,
+      scoutShare: SCOUT_POOL_SHARE,
       profileId,
       votingProgress,
       onVoteCast: celebrate,
@@ -467,6 +488,23 @@ export function initApp() {
   } catch (err) {
     // store.js is designed to fail safe; never let seeding break the boot.
     console.warn('Store seed check failed; continuing with in-memory data.', err);
+  }
+
+  // Scout pipeline boot pass (docs/scout-pipeline-tech-spec.md): drip any
+  // newly-activated drop concepts into the pool (idempotent by id), then roll
+  // the freshness window so only the newest SCOUT_WINDOW_K scouts stay in
+  // Arena rotation. Own try/catch: a scout fault must never break the boot.
+  try {
+    const merged = scout.mergeDrops(
+      store.loadPitches(),
+      SCOUT_DROPS,
+      new Date().toISOString()
+    );
+    if (merged.added > 0) store.savePitches(merged.pitches);
+    const rolled = scout.applyRetirement(merged.pitches, SCOUT_WINDOW_K);
+    if (rolled.changed) store.savePitches(rolled.pitches);
+  } catch (err) {
+    console.warn('Scout drop merge failed; continuing with the stored pool.', err);
   }
 
   // Device-local creator identity (progression add-on): load-or-create the

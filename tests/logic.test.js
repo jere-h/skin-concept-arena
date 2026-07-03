@@ -1637,7 +1637,9 @@ describe('access-split guard, extended — static import-graph assertions', () =
   }
 
   test('wizard.js and arena.js import neither ranking nor progression', () => {
-    for (const name of ['wizard.js', 'arena.js']) {
+    // scout.js / scout-data.js feed the participant-facing Arena and Submit
+    // views, so they are held to the same bar as the views themselves.
+    for (const name of ['wizard.js', 'arena.js', 'scout.js', 'scout-data.js']) {
       for (const spec of importSpecifiers(name)) {
         assert.ok(
           !/ranking/.test(spec),
@@ -1684,6 +1686,8 @@ describe('access-split guard, extended — static import-graph assertions', () =
       'sampler.js',
       'store.js',
       'sample-data.js',
+      'scout.js',
+      'scout-data.js',
       'ids.js',
       'art.js',
     ];

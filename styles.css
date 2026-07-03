@@ -1672,3 +1672,192 @@ progress.meter::-moz-progress-bar {
   color: var(--ink-3);
   font-size: 0.8125rem;
 }
+
+/* ============================================================
+   Scout pipeline (docs/scout-pipeline-tech-spec.md)
+   ============================================================ */
+
+/* The Submit view's "Need a spark?" inspiration panel: a quiet surface-1
+   card with the standard accent left rail. Decoration — never part of the
+   submit gate — so it stays visually subordinate to the form. */
+.spark-box {
+  background: var(--surface-1);
+  border: 1px solid var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.spark-box__sources {
+  margin: 0 0 var(--space-1);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.spark-box__hook {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-2);
+}
+
+.spark-box__next {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--r-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.spark-box__next:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+/* Studio scout attribution: text + border chips (never color alone), and a
+   muted provenance line under the title. */
+.scout-chip,
+.retired-chip {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--r-chip);
+  border: 1px solid var(--ink-3);
+  color: var(--ink-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.scout-chip {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scout-src {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* The pure-human-taste toggle above the leaderboard. */
+.studio-toggle {
+  margin: 0 0 var(--space-3);
+}
+
+.studio-toggle__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.studio-toggle input {
+  accent-color: var(--accent);
+}
+
+/* The scout report panel: one block per drop, provenance + cull stats +
+   rotation status. Same card language as the rest of the Studio. */
+.scout-report {
+  margin-top: var(--space-6);
+}
+
+.scout-report__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.scout-report__lede {
+  margin: 0 0 var(--space-4);
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
+.export-btn {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-4);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--r-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.scout-report__drop {
+  background: var(--surface-1);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.scout-report__drop-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.scout-report__cull {
+  margin-left: var(--space-2);
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.scout-report__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.scout-report__title {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.scout-report__status {
+  margin-left: var(--space-2);
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.scout-report__perf {
+  margin-left: var(--space-2);
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.scout-report__src {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+
+.scout-report__note {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+}

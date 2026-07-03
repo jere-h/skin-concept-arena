@@ -201,7 +201,13 @@ function render(view) {
 
   if (rankEl) renderRankTile(rankEl, ladder, points);
   if (pitchesEl) {
-    renderPitches(pitchesEl, view, owned, statuses, peakTiers, pitches, votes);
+    // Calibration pool: the "Prioritized for upcoming battles" marker promises
+    // the pool-minimum comparison count the SAMPLER acts on, so pitches out of
+    // Arena rotation must not count. Retired scouts are frozen at their final
+    // comparison count (often 0) and would otherwise pin the pool minimum
+    // forever, stripping the marker from every calibrating human pitch.
+    const rotationPool = pitches.filter((p) => !(p && p.retired));
+    renderPitches(pitchesEl, view, owned, statuses, peakTiers, rotationPool, votes);
   }
   if (badgesEl) renderBadgeCase(badgesEl, progression.BADGES, unlocked);
 }

@@ -19,6 +19,10 @@
 // out of the submitter/voter surface by default, matching the product's intent.
 
 import { STUDIO_PASSPHRASE, GAME, COMPARISON_THRESHOLD } from './app.js';
+// Pure bundled data for the scout report panel (drop provenance + cull
+// stats). No logic crosses this import; studio.js remains the only caller of
+// ranking.rank and still never imports progression.
+import { SCOUT_DROPS } from './scout-data.js';
 
 /**
  * True when `input` matches the studio passphrase constant.
@@ -103,12 +107,37 @@ const NEEDS_MORE_ICON =
     'L5.4 6.55V3.2h1.2Z" fill="currentColor"/>' +
   '</svg>';
 
+// The scout attribution chips: text + border, never color alone. Provenance
+// (the two real-world seeds) renders as a muted line under the title with the
+// rationale note carried in the row's title attribute — the full story lives
+// in the scout report panel below the board.
+function scoutChipsMarkup(pitch) {
+  if (!pitch || pitch.origin !== 'scout') return '';
+  let chips = '<span class="scout-chip">Scout</span>';
+  if (pitch.retired) chips += '<span class="retired-chip">retired</span>';
+  return chips;
+}
+
+function scoutProvenanceMarkup(pitch) {
+  if (!pitch || pitch.origin !== 'scout') return '';
+  const insp = pitch.inspiration;
+  const sources = insp && Array.isArray(insp.sources) ? insp.sources : [];
+  if (!sources.length) return '';
+  return (
+    '<span class="scout-src">Scouted from: ' +
+    escapeHtml(sources.join(' × ')) +
+    '</span>'
+  );
+}
+
 // Build the leaderboard table from RankRow[]. Numeric columns carry `.num`
 // (ink text, tabular numerals); the win-rate cell adds a thin accent bar
 // (decoration on top of the accessible table, never a replacement), and
 // below-threshold rows get `.is-below-threshold` plus the neutral icon+label
 // `.needs-more` chip. Titles are escaped since they are user-authored.
-function boardMarkup(rows, threshold) {
+// pitchById attributes scout rows (chip + provenance) — the Studio is the ONE
+// surface where scouts are labeled; the Arena stays blind.
+function boardMarkup(rows, threshold, pitchById) {
   if (!rows.length) {
     return (
       '<p class="board-empty">No pitches yet. Add one from the ' +
@@ -116,9 +145,21 @@ function boardMarkup(rows, threshold) {
     );
   }
 
+  const lookup = pitchById instanceof Map ? pitchById : new Map();
+
   const bodyRows = rows.map(function (row, index) {
+    const pitch = lookup.get(row.id);
+    const isScout = !!(pitch && pitch.origin === 'scout');
     const belowThreshold = !!row.needs_more_votes;
-    const rowClass = belowThreshold ? ' class="is-below-threshold"' : '';
+    const classes = [];
+    if (belowThreshold) classes.push('is-below-threshold');
+    if (isScout) classes.push('is-scout');
+    const rowClass = classes.length ? ' class="' + classes.join(' ') + '"' : '';
+    // The rationale note as a plain tooltip; the report panel repeats it.
+    const note =
+      isScout && pitch.inspiration && typeof pitch.inspiration.note === 'string'
+        ? ' title="' + escapeHtml(pitch.inspiration.note) + '"'
+        : '';
     const flag = belowThreshold
       ? '<span class="needs-more">' + NEEDS_MORE_ICON +
         '<span>needs more votes</span></span>'
@@ -129,9 +170,10 @@ function boardMarkup(rows, threshold) {
     const rate = Number.isFinite(row.win_rate) ? row.win_rate : 0;
     const pct = Math.max(0, Math.min(100, Math.round(rate * 100)));
     return (
-      '<tr' + rowClass + '>' +
+      '<tr' + rowClass + note + '>' +
         '<td class="rank">' + (index + 1) + '</td>' +
-        '<th scope="row" class="board-title">' + escapeHtml(row.title) + '</th>' +
+        '<th scope="row" class="board-title">' + escapeHtml(row.title) +
+          scoutChipsMarkup(pitch) + scoutProvenanceMarkup(pitch) + '</th>' +
         '<td class="num">' + (row.comparisons | 0) + '</td>' +
         '<td class="num">' + (row.wins | 0) + '</td>' +
         '<td class="num rate-cell">' +
@@ -164,6 +206,92 @@ function boardMarkup(rows, threshold) {
       '</thead>' +
       '<tbody>' + bodyRows + '</tbody>' +
     '</table>'
+  );
+}
+
+// --- Scout report (docs/scout-pipeline-tech-spec.md §3.3) --------------------
+//
+// One block per drop, newest first: provenance, the honest cull ratio, and
+// each scout's rotation status + performance so far. Statuses: 'active'
+// (in Arena rotation), 'retired' (rolled out of the freshness window), or
+// 'arrives <date>' (shipped in the bundle, not yet merged by active_from).
+// The Arena additionally caps scouts to a share of each served pool, so an
+// active scout with few comparisons may simply be waiting for rotation.
+function scoutReportMarkup(pitchById, rowById) {
+  const drops = Array.isArray(SCOUT_DROPS) ? SCOUT_DROPS.slice().reverse() : [];
+  if (!drops.length) return '';
+
+  const blocks = drops.map(function (drop) {
+    const stats = drop && drop.stats ? drop.stats : {};
+    const cull =
+      Number.isFinite(stats.shipped) && Number.isFinite(stats.generated)
+        ? 'shipped ' + stats.shipped + ' of ' + stats.generated + ' generated'
+        : '';
+    const pitches = Array.isArray(drop.pitches) ? drop.pitches : [];
+    const rows = pitches.map(function (dropPitch) {
+      const stored = pitchById.get(dropPitch.id);
+      const row = rowById.get(dropPitch.id);
+      let status;
+      if (!stored) {
+        status = 'arrives ' + escapeHtml(dropPitch.active_from || 'soon');
+      } else if (stored.retired) {
+        status = 'retired';
+      } else {
+        status = 'active';
+      }
+      const perf = row
+        ? (row.comparisons | 0) + ' battles · ' + formatRate(row.win_rate)
+        : '—';
+      const insp = dropPitch.inspiration || {};
+      const sources = Array.isArray(insp.sources) ? insp.sources.join(' × ') : '';
+      const note = typeof insp.note === 'string' ? insp.note : '';
+      return (
+        '<li class="scout-report__row">' +
+          '<p class="scout-report__title">' + escapeHtml(dropPitch.title) +
+            '<span class="scout-report__status">' + status + '</span>' +
+            '<span class="scout-report__perf">' + perf + '</span></p>' +
+          '<p class="scout-report__src">' + escapeHtml(sources) + '</p>' +
+          (note ? '<p class="scout-report__note">' + escapeHtml(note) + '</p>' : '') +
+        '</li>'
+      );
+    }).join('');
+
+    return (
+      '<section class="scout-report__drop">' +
+        '<h3 class="scout-report__drop-title">' + escapeHtml(drop.drop_id || 'drop') +
+          (cull ? '<span class="scout-report__cull">' + escapeHtml(cull) + '</span>' : '') +
+        '</h3>' +
+        '<ul class="scout-report__rows">' + rows + '</ul>' +
+      '</section>'
+    );
+  }).join('');
+
+  return (
+    '<section class="scout-report" aria-labelledby="scout-report-heading">' +
+      '<h2 id="scout-report-heading" class="scout-report__heading">Scout report</h2>' +
+      '<p class="scout-report__lede">AI-scouted concepts in the pool — blind in ' +
+        'the Arena like every pitch, fully attributed here. Each cites the two ' +
+        'real-world seeds it was developed from; the cull ratio is what was ' +
+        'discarded to ship it. Export the feedback file and commit it to the ' +
+        'repo’s <code>feedback/</code> directory to steer the next drop.</p>' +
+      '<button type="button" id="studio-export" class="export-btn">' +
+        'Export feedback JSON</button>' +
+      blocks +
+    '</section>'
+  );
+}
+
+// The board controls strip: the pure-human-taste toggle. Scout rows stay in
+// by default (the board is the studio's full read); hiding is one click.
+function boardControlsMarkup(hideScouts) {
+  return (
+    '<div class="studio-toggle">' +
+      '<label class="studio-toggle__label">' +
+        '<input type="checkbox" id="studio-hide-scouts"' +
+          (hideScouts ? ' checked' : '') + '> ' +
+        'Hide scouted concepts (human pitches only)' +
+      '</label>' +
+    '</div>'
   );
 }
 
@@ -208,12 +336,109 @@ export function initStudio(rootEl, deps) {
     if (errorEl) errorEl.textContent = '';
   }
 
+  // "Hide scouted concepts": session-local toggle so leads can read pure
+  // human taste on demand. Scout rows show by default.
+  let hideScouts = false;
+
   function renderBoard() {
     // Re-read the store on each unlock so the board reflects the latest votes.
     const pitches = store.loadPitches();
     const votes = typeof store.loadVotes === 'function' ? store.loadVotes() : [];
-    const rows = ranking.rank(pitches, votes, threshold) || [];
-    boardEl.innerHTML = boardMarkup(rows, threshold);
+    const allRows = ranking.rank(pitches, votes, threshold) || [];
+
+    const pitchById = new Map();
+    for (const pitch of Array.isArray(pitches) ? pitches : []) {
+      if (pitch && typeof pitch.id === 'string') pitchById.set(pitch.id, pitch);
+    }
+    const rowById = new Map();
+    for (const row of allRows) {
+      if (row && typeof row.id === 'string') rowById.set(row.id, row);
+    }
+
+    const rows = hideScouts
+      ? allRows.filter(function (row) {
+          const pitch = pitchById.get(row.id);
+          return !(pitch && pitch.origin === 'scout');
+        })
+      : allRows;
+
+    boardEl.innerHTML =
+      boardControlsMarkup(hideScouts) +
+      boardMarkup(rows, threshold, pitchById) +
+      scoutReportMarkup(pitchById, rowById);
+
+    // Wire the controls fresh each render (innerHTML replaced the nodes).
+    const toggleEl = boardEl.querySelector('#studio-hide-scouts');
+    if (toggleEl) {
+      toggleEl.addEventListener('change', function () {
+        hideScouts = !!toggleEl.checked;
+        renderBoard();
+      });
+    }
+    const exportEl = boardEl.querySelector('#studio-export');
+    if (exportEl) {
+      exportEl.addEventListener('click', function () {
+        exportFeedback(pitchById, allRows);
+      });
+    }
+  }
+
+  /**
+   * Download arena-feedback.json: every scout's performance plus the
+   * strongest calibrated human pitches (full copy — they are the next drop's
+   * positive exemplars). A lead commits this to feedback/ in the repo; the
+   * drop-authoring routine conditions on it. Fail-safe: an export fault
+   * never breaks the board.
+   */
+  function exportFeedback(pitchById, allRows) {
+    try {
+      const scouts = [];
+      const topHuman = [];
+      for (const row of allRows) {
+        const pitch = pitchById.get(row.id);
+        if (pitch && pitch.origin === 'scout') {
+          scouts.push({
+            id: row.id,
+            title: row.title,
+            comparisons: row.comparisons,
+            wins: row.wins,
+            win_rate: row.win_rate,
+            retired: !!pitch.retired,
+          });
+        } else if (pitch && !row.needs_more_votes && topHuman.length < 5) {
+          // allRows is already win-rate-sorted; first five calibrated humans.
+          topHuman.push({
+            title: pitch.title,
+            description: pitch.description,
+            item_slot: pitch.item_slot,
+            theme_tags: pitch.theme_tags,
+            comparisons: row.comparisons,
+            win_rate: row.win_rate,
+          });
+        }
+      }
+      const payload = {
+        exported_at: new Date().toISOString(),
+        comparison_threshold: threshold,
+        scouts: scouts,
+        top_human: topHuman,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'arena-feedback.json';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 0);
+    } catch (err) {
+      console.warn('Feedback export failed.', err);
+    }
   }
 
   function unlock() {
