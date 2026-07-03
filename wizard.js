@@ -23,10 +23,35 @@
 // modules — the access-split guard asserts that statically, and its dynamic
 // twin injects a spy ranking dependency that MUST never be called here
 // (finding 6). We touch deps.store only.
+//
+// The one import below is pure bundled DATA (the scout drops' inspiration
+// sparks), feeding the optional "Need a spark?" panel — nothing score-shaped,
+// so the access split is untouched.
+
+import { SCOUT_DROPS } from './scout-data.js';
+
+// Every spark across every drop, flattened once. A spark is a seed pair plus
+// a one-line hook — an inspiration jolt for a stuck creator, never a
+// pre-written pitch (the human completes it; see the tech spec).
+function allSparks() {
+  const sparks = [];
+  const drops = Array.isArray(SCOUT_DROPS) ? SCOUT_DROPS : [];
+  for (const drop of drops) {
+    if (!drop || !Array.isArray(drop.sparks)) continue;
+    for (const spark of drop.sparks) {
+      if (spark && typeof spark.hook === 'string' && Array.isArray(spark.sources)) {
+        sparks.push(spark);
+      }
+    }
+  }
+  return sparks;
+}
 
 // Fixed item slots for the seeded game. A select needs a real default so
 // item_slot is never empty (finding 3) — the first option is pre-selected.
-const ITEM_SLOTS = [
+// Exported (with THEME_TAGS) as the app's authoritative vocabulary: the scout
+// drop validator and the drop-authoring routine must use these exact lists.
+export const ITEM_SLOTS = [
   'Character Skin',
   'Weapon Skin',
   'Headgear',
@@ -39,7 +64,8 @@ const ITEM_SLOTS = [
 // Fixed theme palette: 7 distinct TONALITIES (how a skin feels, not what
 // genre it borrows), so any concept — from any setting — can be tagged by
 // vibe. Toggle chips only — no free-text entry (finding 4).
-const THEME_TAGS = [
+// Exported — see ITEM_SLOTS above.
+export const THEME_TAGS = [
   'Cute',
   'Badass',
   'Elegant',
@@ -99,6 +125,17 @@ function templateMarkup() {
       '<p class="view-lede">Pitch a look for the game. Pick a slot, tag the ' +
       'vibe, and describe what players would see in-game.</p>' +
     '</header>' +
+    // "Need a spark?" — an optional inspiration jolt (a real-world seed pair
+    // + a one-line hook from the scout drops). Purely additive: hidden when
+    // no sparks are bundled, never part of the submit gate.
+    '<aside id="wizard-spark" class="spark-box fade-in" hidden>' +
+      '<p class="step-eyebrow">Need a spark?</p>' +
+      '<p id="wizard-spark-sources" class="spark-box__sources"></p>' +
+      '<p id="wizard-spark-hook" class="spark-box__hook"></p>' +
+      '<button type="button" id="wizard-spark-next" class="spark-box__next">' +
+        'Another spark' +
+      '</button>' +
+    '</aside>' +
     '<form id="wizard-form" class="wizard-form fade-in" novalidate autocomplete="off">' +
       '<section class="step">' +
         '<p class="step-eyebrow">01 · Item slot</p>' +
@@ -406,6 +443,36 @@ export function initWizard(rootEl, deps) {
   form.addEventListener('input', function () {
     if (confirmEl && !confirmEl.hidden) hideConfirmation();
   });
+
+  // --- The "Need a spark?" panel (decoration; fail-safe end to end) ---------
+  // Shows one seed pair + hook at a time; "Another spark" cycles from a
+  // random start so repeat visitors don't always see the same first spark,
+  // then sequentially so nothing repeats until wraparound.
+  try {
+    const sparks = allSparks();
+    const sparkEl = rootEl.querySelector('#wizard-spark');
+    const sparkSourcesEl = rootEl.querySelector('#wizard-spark-sources');
+    const sparkHookEl = rootEl.querySelector('#wizard-spark-hook');
+    const sparkNextEl = rootEl.querySelector('#wizard-spark-next');
+    if (sparks.length && sparkEl && sparkSourcesEl && sparkHookEl) {
+      let sparkIndex = Math.floor(Math.random() * sparks.length);
+      const showSpark = function () {
+        const spark = sparks[sparkIndex % sparks.length];
+        sparkSourcesEl.textContent = spark.sources.join(' × ');
+        sparkHookEl.textContent = spark.hook;
+      };
+      showSpark();
+      sparkEl.hidden = false;
+      if (sparkNextEl) {
+        sparkNextEl.addEventListener('click', function () {
+          sparkIndex = (sparkIndex + 1) % sparks.length;
+          showSpark();
+        });
+      }
+    }
+  } catch (_err) {
+    /* the spark panel is decoration; a fault leaves it hidden */
+  }
 
   // Establish the initial disabled state.
   refreshGate();

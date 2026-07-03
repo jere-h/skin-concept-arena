@@ -66,6 +66,15 @@ const INSUFFICIENT_MESSAGE =
 export function initArena(rootEl, deps) {
   if (!rootEl || !deps) return;
   const { store, sampler } = deps;
+  // Scout metering (docs/scout-pipeline-tech-spec.md): the scout module caps
+  // the AI-scouted share of the pool and forbids scout-vs-scout pairs while a
+  // human pitch exists. Optional — without it (older tests, defensive) the
+  // arena runs exactly as before on the retired-filtered pool.
+  const scout =
+    deps.scout && typeof deps.scout.composeArenaPool === 'function'
+      ? deps.scout
+      : null;
+  const scoutShare = Number.isFinite(deps.scoutShare) ? deps.scoutShare : 0.4;
   // Device-local voter identity; null (no profile) stamps voter_id null — the
   // same shape sample/pre-add-on votes carry — and disables the owner filter.
   const profileId =
@@ -126,8 +135,15 @@ export function initArena(rootEl, deps) {
    * continue rather than dead-ending.
    */
   function render() {
-    const pool = store.loadPitches();
+    const raw = store.loadPitches();
     const votes = store.loadVotes();
+
+    // Retired scouts leave Arena rotation first (the rolling freshness
+    // window, flagged at boot — records and votes survive, they just stop
+    // being served). Human pitches never carry the flag.
+    const pool = Array.isArray(raw)
+      ? raw.filter((pitch) => !(pitch && pitch.retired))
+      : raw;
 
     // Self-vote exclusion (PRD MVP 6): this profile's own pitches leave the
     // pool BEFORE the sampler sees it. Sample / pre-add-on pitches carry no
@@ -136,18 +152,29 @@ export function initArena(rootEl, deps) {
     // and counts for excluded pitches are simply irrelevant to the filtered
     // list. The filtered pool can be 'insufficient' even when the raw pool is
     // >=2 (all remaining are yours) — the same message state covers it.
-    const pitches =
+    const filtered =
       profileId && Array.isArray(pool)
         ? pool.filter((pitch) => !(pitch && pitch.owner_id === profileId))
         : pool;
 
-    let result = sampler.pickPair(pitches, votes, seenPairs);
+    // Scout share cap, then the pair pick. pickPairWithQuota never serves
+    // scout-vs-scout while a human pitch exists (it works on a COPY of
+    // seenPairs, so the session history stays ours); both mechanisms stand
+    // down when scouts are all that is left, keeping the Arena alive.
+    const pitches = scout ? scout.composeArenaPool(filtered, scoutShare) : filtered;
+
+    let result = scout
+      ? scout.pickPairWithQuota(sampler, pitches, votes, seenPairs)
+      : sampler.pickPair(pitches, votes, seenPairs);
 
     if (result.status === 'exhausted') {
       // Every possible pair has been seen this session: forget the history and
-      // start a fresh loop over the same pool (finding 1).
+      // start a fresh loop over the same pool (finding 1). Previously-seen
+      // mixed pairs become servable again, so the quota can always find one.
       seenPairs.clear();
-      result = sampler.pickPair(pitches, votes, seenPairs);
+      result = scout
+        ? scout.pickPairWithQuota(sampler, pitches, votes, seenPairs)
+        : sampler.pickPair(pitches, votes, seenPairs);
     }
 
     if (result.status === 'ok' && Array.isArray(result.pair)) {

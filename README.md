@@ -8,6 +8,40 @@ Four views: **Submit** (the guided pitch wizard), **Arena** (blind head-to-head
 voting), **Locker** (your private progression hub), and **Studio** (the
 passphrase-gated exact-numbers leaderboard).
 
+## The Scout pipeline (AI-developed concepts)
+
+A steady, metered inflow of AI-developed skin concepts ("scouts") keeps the
+Arena and the Studio review queue fresh between human submissions. Drops are
+committed data (`scout-data.js`), authored by a recurring Claude routine
+(`docs/scout-routine.md`) and merged as PRs — a human merge is the editorial
+gate. At boot, newly activated drop concepts drip into the pool (idempotent
+by id, staggered by `active_from`) and a rolling window retires all but the
+newest `SCOUT_WINDOW_K` scouts from rotation (flagged, never deleted).
+
+Metering and attribution (`scout.js`, pure and import-free):
+
+- Scouts are capped to `SCOUT_POOL_SHARE` of any served Arena pool, and a
+  served pair never holds two scouts while a human pitch exists; both rules
+  stand down when scouts are all that remains (survival mode).
+- Scouts carry `owner_id: null` — everyone's Arena, no one's Locker, zero
+  effect on career points, badges, or ranks.
+- The Arena stays blind (disclosed in the methodology tooltip); the Studio
+  labels every scout row, offers a "hide scouted" toggle, and renders a Scout
+  report per drop: the two real-world seeds each concept was developed from,
+  the rationale, the honest cull ratio, and performance so far. An "Export
+  feedback JSON" button produces the file a lead commits to `feedback/` to
+  steer the next drop.
+- The Submit view gains a "Need a spark?" panel — seed pairs + one-line hooks
+  from the drops, inspiration jolts a human completes, never pre-written
+  pitches.
+
+Anti-slop is mechanical where possible: `node scripts/validate-drops.mjs`
+enforces the drop contract (wizard vocabulary, length caps, a banned-cliché
+lexicon, per-drop slot/tag spread, activation stagger, Jaccard dedupe against
+samples + demo pitches + all prior drops). See
+`docs/scout-pipeline-tech-spec.md` and the brainstorm it came from,
+`docs/ai-scout-pipeline-plan.md`.
+
 ## The progression layer (the Locker)
 
 The competitive add-on (see `../gamification-prd.md` / `../gamification-trd.md`)
@@ -112,14 +146,18 @@ Progression criteria (the add-on):
 ## Tests
 
 ```
-node --test tests/logic.test.js
+node --test tests/logic.test.js tests/scout.test.js
 ```
 
 Covers the store round-trip and fail-safe fallbacks, sampler pairing, ranking
 order, the rev-2 tier bands and their edges, the monotonicity property, career
 math and ladder edges, the peak ratchet, badge predicates, owner filtering and
 calibration priority, unlock persistence, the celebration toast-once pass, and
-the access-split guard (both a dynamic spy and static import-graph assertions).
+the access-split guard (both a dynamic spy and static import-graph assertions,
+extended over the scout modules). `tests/scout.test.js` adds the Scout
+pipeline: drop merge idempotency and activation gating, the retirement window,
+the share cap and pair quota, the bundled drops passing the full validator,
+and the validator's anti-slop rules rejecting seeded violations.
 
 ## Hosting
 
