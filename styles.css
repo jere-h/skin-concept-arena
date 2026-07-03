@@ -1,0 +1,1288 @@
+/* Skin Concept Arena — styles.css
+   Single stylesheet: design system + every view, per gamification-design-spec.md
+   (the design source of truth). Dark "Emberhold Arena" theme: deep neutral
+   surfaces, ONE ember accent for everything interactive, metallic tier identity
+   worn ONLY by medal chips/glyphs and placeholder art. Portrait-first with a
+   single breakpoint at 720px. Motion band 150-220ms, transform/opacity only;
+   prefers-reduced-motion collapses motion to opacity. NO CDN fonts, NO external
+   assets. */
+
+/* ============================================================
+   Token contract — copied VERBATIM from gamification-design-spec.md
+   ============================================================ */
+:root {
+  /* surfaces & ink (Theme Lock: dark, single theme) */
+  --surface-0: #101215;   /* page */
+  --surface-1: #14161a;   /* cards, panels (the validated chart/chip surface) */
+  --surface-2: #1b1e24;   /* raised: inputs, meter tracks, chips */
+  --line:      #262a31;   /* hairlines, card borders */
+  --ink:       #e8eaed;   /* primary text     (15.0:1 on surface-1) */
+  --ink-2:     #a7adb8;   /* secondary text   (8.0:1) */
+  --ink-3:     #6d7480;   /* muted — large/non-essential text only (3.9:1) */
+
+  /* Color Lock: ONE interactive accent for the whole app */
+  --accent:     #f25c2a;  /* ember — buttons, active tab, focus, links, flashes */
+  --accent-ink: #16100c;  /* text on accent (5.7:1) */
+
+  /* reserved tier identity — medal chips/glyphs ONLY, never on interactives */
+  --tier-bronze:  #b07038;
+  --tier-silver:  #5f8ed0;  /* steel-blue silver: keeps chroma so it reads as identity */
+  --tier-gold:    #b5851b;
+  --tier-diamond: #1f9db8;
+
+  /* Shape Lock: one radius scale */
+  --r-card: 10px;  --r-control: 8px;  --r-chip: 999px;
+
+  /* motion band (MOTION 3–4): 150–220ms, transform/opacity only */
+  --t-fast: 160ms;  --t-med: 220ms;
+}
+
+/* Supplementary plumbing tokens (spacing / type / tap floor). Nothing here
+   introduces a second accent, radius scale, or theme — the Locks live in the
+   contract block above. */
+:root {
+  color-scheme: dark;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --tap: 44px; /* tap target floor */
+  --accent-glow: rgba(242, 92, 42, 0.16); /* --accent at 16%: focus ring + flash halo */
+}
+
+/* ============================================================
+   Global reset
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1rem; /* >= 16px floor */
+  line-height: 1.55;
+  /* Type-scale rule: tabular numerals on EVERY count/points/meter number —
+     applied globally so no numeric surface can miss it. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fluid media — never wider than the phone */
+img, svg, video, canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+h1, h2, h3, h4, p {
+  margin: 0;
+}
+
+/* The hidden attribute always wins, whatever display a class sets. */
+[hidden] {
+  display: none !important;
+}
+
+/* Long strings never force horizontal scroll */
+.pitch-card__desc,
+.pitch-card__title,
+.locker-pitch__title,
+.leaderboard td,
+.leaderboard th {
+  overflow-wrap: anywhere;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Type scale
+   ============================================================ */
+.view-title {
+  font-size: clamp(1.55rem, 4vw, 2.15rem); /* fluid display heading */
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.view-lede {
+  color: var(--ink-2);
+  font-size: 1rem;
+  margin-top: var(--space-2);
+  max-width: 60ch;
+}
+
+/* The one eyebrow style (step numbers, stat-tile labels, card slot lines).
+   --ink-3 is reserved for exactly this kind of non-essential label. */
+.step-eyebrow,
+.locker-eyebrow,
+.pitch-card__slot {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+/* ============================================================
+   App shell + masthead
+   ============================================================ */
+#app {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.masthead {
+  display: flex;
+  flex-direction: column; /* portrait-first: brand row, then the tab strip */
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.masthead__brand {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.wordmark {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+/* The fixed-game context chip beside the wordmark. */
+.game-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: 2px var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Tabs — a segmented control on a surface-1 strip; sticky on mobile
+   ============================================================ */
+nav.tabs {
+  position: sticky; /* mobile: the switcher stays reachable while scrolling */
+  top: 0;
+  z-index: 30;
+  display: flex;
+  gap: var(--space-1);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  padding: var(--space-1);
+}
+
+nav.tabs button {
+  appearance: none;
+  flex: 1 1 0;
+  min-height: var(--tap);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--r-control) - 2px);
+  padding: var(--space-2) var(--space-2);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 1rem;
+  transition: color var(--t-fast) ease, background-color var(--t-fast) ease,
+    box-shadow var(--t-fast) ease;
+}
+
+nav.tabs button:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+nav.tabs button.is-active {
+  color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 -2px 0 var(--accent); /* the accent underline */
+}
+
+/* ============================================================
+   Views — one visible at a time
+   ============================================================ */
+.view {
+  display: block;
+}
+
+.view[hidden],
+.is-hidden {
+  display: none !important;
+}
+
+.view-head {
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+/* ============================================================
+   Buttons — the ONE accent action style
+   ============================================================ */
+.btn-primary,
+#wizard-submit,
+.gate__submit {
+  appearance: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-control);
+  padding: var(--space-3) var(--space-5);
+  min-height: var(--tap);
+  font-weight: 700;
+  transition: filter var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+
+.btn-primary:hover:not(:disabled),
+#wizard-submit:hover:not(:disabled),
+.gate__submit:hover {
+  filter: brightness(1.07);
+}
+
+/* Disabled Submit is self-explanatory: --surface-2 + --ink-3, and wizard.js
+   swaps its label for the live requirements count. */
+#wizard-submit:disabled {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn-primary:active:not(:disabled),
+  #wizard-submit:active:not(:disabled),
+  .gate__submit:active {
+    transform: translateY(1px);
+  }
+}
+
+/* ============================================================
+   Submit wizard — numbered step blocks + the completeness checklist
+   ============================================================ */
+#wizard-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  max-width: 680px;
+}
+
+/* One step block: a surface-1 card with a numbered eyebrow. */
+.step,
+.wizard-gate {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-4) var(--space-4) var(--space-5);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field-label,
+.field label {
+  /* Labels focus their control on tap, so size them as real tap targets */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: var(--space-2) 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.field-hint {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
+.field-optional {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.field-input,
+#wizard-slot,
+#wizard-title,
+#wizard-desc,
+#wizard-image,
+#studio-pass {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  color: var(--ink);
+  transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+
+.field-input::placeholder,
+#studio-pass::placeholder {
+  color: var(--ink-2);
+  opacity: 0.75;
+}
+
+#wizard-desc {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field-input:hover,
+#studio-pass:hover {
+  border-color: var(--ink-3);
+}
+
+.field-input:focus,
+#studio-pass:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Toggle chips — theme tags. Selection is border + check, never a fill
+   (the Color Lock keeps accent fills rare). */
+#wizard-tags,
+.chip-row,
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  appearance: none;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: var(--space-2) var(--space-4);
+  min-height: var(--tap);
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: border-color var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.chip:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip:active {
+    transform: translateY(1px);
+  }
+}
+
+.chip.is-selected {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.chip.is-selected::before {
+  content: '\2713'; /* the check that carries selection with the border */
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: var(--space-2);
+}
+
+/* The live completeness checklist above Submit: three rows flipping
+   x (--ink-3) to check (--accent) as requirements are met. */
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: color var(--t-fast) ease;
+}
+
+.check__mark {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+  color: var(--ink-3);
+  transition: color var(--t-fast) ease;
+}
+
+.check.is-met {
+  color: var(--ink);
+}
+
+.check.is-met .check__mark {
+  color: var(--accent);
+}
+
+.wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Confirmation — a success panel with an accent left border (no green: status
+   colors aren't introduced for a single state). Carries NO score/rank. */
+#wizard-confirm,
+.badge {
+  display: block;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-control);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* ============================================================
+   Arena — the duel stage: two pitch cards with a VS medallion between
+   ============================================================ */
+#arena-pair {
+  display: grid;
+  grid-template-columns: 1fr; /* portrait-first: card / VS / card stacked */
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.vs-medallion {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-chip);
+  background: var(--surface-2);
+  border: 2px solid var(--line);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  align-self: center;
+}
+
+/* One pitch card, reused by the Arena (as a button) and echoed by the Locker
+   rows: art zone on top, slot eyebrow, title, description, tag chips. */
+.pitch-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-3) var(--space-3) var(--space-4);
+  text-align: left;
+  color: var(--ink);
+  width: 100%;
+  min-height: var(--tap);
+  transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease,
+    transform var(--t-fast) ease;
+}
+
+.pitch-card:hover {
+  border-color: var(--accent);
+}
+
+.pitch-card__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pitch-card__desc {
+  font-size: 1rem;
+  color: var(--ink-2);
+}
+
+.pitch-card__tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+.pitch-card__tag {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: 2px var(--space-3);
+}
+
+/* The art zone: a real image or the deterministic placeholder (art.js). */
+.pitch-card__image,
+.pitch-art {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pitch-card__image {
+  object-fit: cover;
+}
+
+.pitch-art svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Chosen-card flash: an instant accent ring (arena.js holds the pair for
+   ~200ms before the next one slides in). The slight scale is motion, so it
+   lives behind the reduced-motion gate below. */
+.pitch-card.is-chosen {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-glow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pitch-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .pitch-card:active {
+    transform: translateY(0);
+  }
+
+  .pitch-card.is-chosen,
+  .pitch-card.is-chosen:hover {
+    transform: scale(1.015);
+  }
+
+  /* The fresh pair slides in (transform/opacity only, within the band). */
+  #arena-pair > .pitch-card {
+    animation: card-in var(--t-med) ease both;
+  }
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+}
+
+/* Session tally strip: votes this session + live progress to the next voting
+   badge, with a thin meter (values stay ink text; the bar is the accent). */
+.session-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.session-strip__votes {
+  color: var(--ink);
+}
+
+.session-strip .meter {
+  flex: 1 1 120px;
+  min-width: 120px;
+}
+
+/* Insufficient-pool / empty state: the large muted glyph treatment. */
+#arena-message {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-6) var(--space-5);
+  color: var(--ink-2);
+  font-size: 1rem;
+  text-align: center;
+}
+
+#arena-message::before {
+  content: 'VS';
+  display: block;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-bottom: var(--space-3);
+}
+
+/* ============================================================
+   Meters — shared mark spec: thin bar, rounded data end, recessive
+   surface-2 track, accent fill; the value is always ink TEXT nearby
+   ============================================================ */
+progress.meter {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  border: none;
+  background: var(--surface-2);
+  border-radius: var(--r-chip);
+  overflow: hidden;
+}
+
+progress.meter::-webkit-progress-bar {
+  background: var(--surface-2);
+  border-radius: var(--r-chip);
+}
+
+progress.meter::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: var(--r-chip);
+}
+
+progress.meter::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: var(--r-chip);
+}
+
+/* ============================================================
+   Locker — rank stat tile, own-pitch rows, badge case
+   ============================================================ */
+.locker-block {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-5) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+/* Block 1 — the career-rank stat tile: eyebrow, hero rank name, detail line,
+   thin progress meter. */
+.locker-rank__name {
+  font-size: clamp(1.6rem, 5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-top: var(--space-1);
+}
+
+.locker-rank__detail,
+.locker-note,
+.locker-calibration__label {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  margin-top: var(--space-1);
+}
+
+.locker-block .meter {
+  margin-top: var(--space-3);
+}
+
+.locker-block__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* Block 2 — own-pitch rows: art thumb + identity, status on the right edge. */
+.locker-pitchlist {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.locker-pitch {
+  display: flex;
+  flex-direction: column; /* portrait-first: identity, then status */
+  gap: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+}
+
+.locker-pitch__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The pitch-card anatomy at row scale: a small fixed art thumb. */
+.locker-pitch__art {
+  flex: 0 0 96px;
+  width: 96px;
+}
+
+.locker-pitch__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.locker-pitch__title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.locker-pitch__main .pitch-card__tags {
+  margin-top: var(--space-2);
+}
+
+.locker-pitch__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.locker-calibration {
+  width: 100%;
+}
+
+.locker-calibration .meter {
+  margin-top: var(--space-2);
+}
+
+/* "Prioritized for upcoming battles": an accent dot + label (P1-3). */
+.locker-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.locker-priority::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-chip);
+  background: var(--accent);
+  flex: 0 0 auto;
+}
+
+/* Tier medal chips: tier color + a DISTINCT glyph per tier + the text label —
+   identity is never color-alone, and tier colors never touch interactives. */
+.medal-chip,
+.peak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Outline variant: the recorded peak riding beside a lower live tier. */
+.peak-chip {
+  background: transparent;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.medal-chip[data-tier='bronze'],
+.peak-chip[data-tier='bronze'] {
+  --tier-color: var(--tier-bronze);
+}
+
+.medal-chip[data-tier='silver'],
+.peak-chip[data-tier='silver'] {
+  --tier-color: var(--tier-silver);
+}
+
+.medal-chip[data-tier='gold'],
+.peak-chip[data-tier='gold'] {
+  --tier-color: var(--tier-gold);
+}
+
+.medal-chip[data-tier='diamond'],
+.peak-chip[data-tier='diamond'] {
+  --tier-color: var(--tier-diamond);
+}
+
+.tier-glyph {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--tier-color, var(--ink-2));
+}
+
+/* Block 3 — the badge case grid. */
+.badge-grid {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.badge-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+}
+
+.badge-glyph {
+  width: 20px;
+  height: 20px;
+  color: var(--ink-2);
+  margin-bottom: var(--space-2);
+}
+
+.badge-tile__label {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.badge-tile__detail {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  margin-top: var(--space-1);
+}
+
+/* Locked: a reduced-opacity grayscale silhouette; the condition text is the
+   to-do list (kept at readable contrast via the tile-level opacity only). */
+.badge-tile.is-locked {
+  opacity: 0.55;
+}
+
+.badge-tile.is-locked .badge-glyph {
+  color: var(--ink-3);
+}
+
+/* Empty state teaches the loop: Submit -> Battle -> Medal -> Rank. */
+.locker-empty {
+  margin-top: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--line);
+  border-radius: var(--r-card);
+  text-align: center;
+}
+
+.locker-empty__glyph {
+  width: 48px;
+  height: 48px;
+  color: var(--ink-3);
+  margin: 0 auto var(--space-3);
+}
+
+.locker-empty__lead {
+  font-weight: 700;
+}
+
+.locker-empty__loop {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.locker-empty__loop li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.locker-empty__loop li:not(:last-child)::after {
+  content: '\2192'; /* -> */
+  color: var(--ink-3);
+}
+
+.locker-empty__how {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  margin-top: var(--space-3);
+  max-width: 44ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ============================================================
+   Studio — passphrase gate + the exact-numbers leaderboard
+   ============================================================ */
+#studio-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-5) var(--space-4);
+  max-width: 460px;
+}
+
+.gate__label {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.gate__row {
+  display: flex;
+  flex-direction: column; /* portrait-first; goes inline at the breakpoint */
+  gap: var(--space-3);
+}
+
+.gate-note {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+
+#studio-error {
+  color: var(--accent); /* emphasis rides the one accent; no new status color */
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+#studio-error:empty {
+  display: none;
+}
+
+/* Leaderboard: the accessible table stays the base; bars are decoration. */
+#studio-board {
+  margin-top: var(--space-4);
+  overflow-x: auto; /* wide table scrolls inside itself, never the page */
+}
+
+.board-empty {
+  color: var(--ink-2);
+}
+
+.leaderboard {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 1rem;
+}
+
+.leaderboard caption {
+  text-align: left;
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  padding-bottom: var(--space-3);
+}
+
+.leaderboard th,
+.leaderboard td {
+  text-align: left;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line); /* hairline separators, no striping */
+  vertical-align: top;
+}
+
+.leaderboard thead th {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid var(--line);
+}
+
+.leaderboard tbody tr:hover {
+  background: var(--surface-1);
+}
+
+.leaderboard .board-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.leaderboard .rank {
+  color: var(--ink-3);
+  width: 3ch;
+}
+
+.leaderboard .num {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.leaderboard th.num {
+  text-align: right;
+}
+
+.leaderboard tr.is-below-threshold .num,
+.leaderboard tr.is-below-threshold .board-title {
+  color: var(--ink-2);
+}
+
+/* Win-rate: the value stays ink text; the thin accent bar beneath it is
+   anchored to the zero baseline of its surface-2 track (mark spec). */
+.rate-cell .rate-value {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rate-bar {
+  display: block;
+  width: 72px;
+  height: 6px;
+  margin-top: 2px; /* the 2px gap from the row line of values */
+  margin-left: auto; /* hugs the right-aligned numeral */
+  background: var(--surface-2);
+  border-radius: var(--r-chip);
+  overflow: hidden;
+}
+
+.rate-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-chip);
+}
+
+/* "Needs more votes": a NEUTRAL icon + label chip — no color semantics, so it
+   never collides with tier metals or reads as an error. */
+.needs-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: 2px var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.needs-more__icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+/* ============================================================
+   Toast region — the celebration queue (one at a time, FIFO)
+   ============================================================ */
+#toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(92vw, 420px);
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* One celebration chip. Hidden by default; app.js adds .is-visible on the
+   queue's cadence. Motion is transform/opacity ONLY, gated behind
+   no-preference so reduced-motion users get an instant opacity flip. */
+.toast {
+  margin: 0;
+  max-width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.toast::before {
+  content: '\2726'; /* the spark glyph on every celebration line */
+  color: var(--accent);
+  margin-right: var(--space-2);
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    transition: opacity var(--t-med) ease, transform var(--t-med) ease;
+    will-change: opacity, transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transform: none;
+    transition: opacity var(--t-med) ease;
+  }
+}
+
+/* ============================================================
+   Entrance animation — transform/opacity only, observer-driven
+   ============================================================ */
+.fade-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity var(--t-med) ease, transform var(--t-med) ease;
+    will-change: opacity, transform;
+  }
+
+  .fade-in.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================================================
+   Breakpoint LOCK — the ONE @media width query, at 720px: enhance UP
+   ============================================================ */
+@media (min-width: 720px) {
+  #app {
+    padding: var(--space-6);
+  }
+
+  /* Masthead becomes one row: brand left, segmented tabs right (no longer
+     sticky — the switcher is always in reach on a tall viewport). */
+  .masthead {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  nav.tabs {
+    position: static;
+    flex: 0 0 auto;
+  }
+
+  nav.tabs button {
+    flex: 0 0 auto;
+    padding: var(--space-2) var(--space-4);
+  }
+
+  /* Arena: the duel goes side-by-side with the VS medallion centered. */
+  #arena-pair {
+    grid-template-columns: 1fr auto 1fr;
+    gap: var(--space-4);
+    align-items: stretch;
+  }
+
+  .vs-medallion {
+    align-self: center;
+  }
+
+  /* Locker rows: identity left, status on the right edge. */
+  .locker-pitch {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .locker-pitch__head {
+    flex: 1 1 auto;
+  }
+
+  .locker-pitch__status {
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    max-width: 45%;
+  }
+
+  .locker-calibration {
+    width: 240px;
+  }
+
+  /* Badge case grids up into square-ish tiles. */
+  .badge-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+
+  /* Studio gate: passphrase + unlock share a row. */
+  .gate__row {
+    flex-direction: row;
+  }
+
+  .gate__row #studio-pass {
+    flex: 1 1 auto;
+  }
+}

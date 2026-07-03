@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skin Concept Arena</title>
+  <meta name="description" content="Pitch a skin concept, vote head-to-head, earn tier medals and career rank in your Locker, and check the studio leaderboard.">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="masthead">
+      <div class="masthead__brand">
+        <p class="wordmark">Skin Concept Arena</p>
+        <!-- Fixed-game context chip; app.js fills [data-game-name] slots. -->
+        <span class="game-chip" data-game-name>Emberhold</span>
+      </div>
+      <nav class="tabs" aria-label="Views">
+        <button type="button" class="tab is-active" data-view="submit" aria-pressed="true">Submit</button>
+        <button type="button" class="tab" data-view="arena" aria-pressed="false">Arena</button>
+        <button type="button" class="tab" data-view="locker" aria-pressed="false">Locker</button>
+        <button type="button" class="tab" data-view="studio" aria-pressed="false">Studio</button>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <!-- SUBMIT VIEW — static fallback markup; wizard.js re-renders this
+           section at boot with the live step blocks + completeness checklist,
+           so the structure below mirrors that template. -->
+      <section id="view-submit" class="view" aria-labelledby="submit-heading">
+        <header class="view-head fade-in">
+          <h1 id="submit-heading" class="view-title">Submit a skin concept</h1>
+          <p class="view-lede">Pitch a look for the game. Pick a slot, tag the vibe, and describe what players would see in-game.</p>
+        </header>
+
+        <form id="wizard-form" class="wizard-form fade-in" novalidate>
+          <section class="step">
+            <p class="step-eyebrow">01 · Item slot</p>
+            <div class="field">
+              <label class="field-label" for="wizard-slot">Item slot</label>
+              <select id="wizard-slot" class="field-input" name="item_slot"></select>
+            </div>
+          </section>
+
+          <section class="step">
+            <p class="step-eyebrow">02 · Theme</p>
+            <div class="field">
+              <span class="field-label" id="wizard-tags-label">Theme tags</span>
+              <p class="field-hint">Choose at least one.</p>
+              <div id="wizard-tags" class="chip-row" role="group" aria-labelledby="wizard-tags-label"></div>
+            </div>
+          </section>
+
+          <section class="step">
+            <p class="step-eyebrow">03 · Words</p>
+            <div class="field">
+              <label class="field-label" for="wizard-title">Title</label>
+              <input id="wizard-title" class="field-input" name="title" type="text" autocomplete="off" placeholder="Name the concept">
+            </div>
+            <div class="field">
+              <label class="field-label" for="wizard-desc">Description</label>
+              <textarea id="wizard-desc" class="field-input field-textarea" name="description" rows="4" placeholder="What does it look like? What is the fantasy?"></textarea>
+            </div>
+          </section>
+
+          <section class="step">
+            <p class="step-eyebrow">04 · Art</p>
+            <div class="field">
+              <label class="field-label" for="wizard-image">Image URL <span class="field-optional">(optional)</span></label>
+              <input id="wizard-image" class="field-input" name="image_url" type="url" autocomplete="off" placeholder="https://... (leave blank for a placeholder)">
+            </div>
+          </section>
+
+          <div class="wizard-gate">
+            <ul id="wizard-checklist" class="checklist" aria-label="Submission requirements">
+              <li class="check" data-check="title"><span class="check__mark" aria-hidden="true">✗</span> <span class="check__label">Title written</span></li>
+              <li class="check" data-check="desc"><span class="check__mark" aria-hidden="true">✗</span> <span class="check__label">Description written</span></li>
+              <li class="check" data-check="tag"><span class="check__mark" aria-hidden="true">✗</span> <span class="check__label">At least one theme tag</span></li>
+            </ul>
+            <div class="wizard-actions">
+              <button id="wizard-submit" type="submit" disabled>0 of 3 requirements met</button>
+            </div>
+            <p id="wizard-confirm" class="badge" hidden></p>
+          </div>
+        </form>
+      </section>
+
+      <!-- ARENA VIEW -->
+      <section id="view-arena" class="view" aria-labelledby="arena-heading" hidden>
+        <header class="view-head fade-in">
+          <h1 id="arena-heading" class="view-title">Which would you rather see in-game?</h1>
+          <p class="view-lede">Tap the concept you prefer. Your pick is recorded and a fresh pair loads.</p>
+        </header>
+
+        <div id="arena-pair" class="arena-pair fade-in"></div>
+        <p id="arena-message" class="arena-message" hidden></p>
+      </section>
+
+      <!-- LOCKER VIEW -->
+      <section id="view-locker" class="view" aria-labelledby="locker-heading" hidden>
+        <header class="view-head fade-in">
+          <h1 id="locker-heading" class="view-title">Your locker</h1>
+          <p class="view-lede">Your career rank, your own pitches' medals, and your badge case. Exact results stay with the studio.</p>
+        </header>
+
+        <!-- The three Locker blocks; locker.js renders into these containers. -->
+        <div id="locker-rank" class="locker-block fade-in"></div>
+        <div id="locker-pitches" class="locker-block fade-in"></div>
+        <div id="locker-badges" class="locker-block fade-in"></div>
+      </section>
+
+      <!-- STUDIO VIEW — static fallback markup; studio.js re-renders this
+           section at boot (gate first, board revealed on unlock). -->
+      <section id="view-studio" class="view" aria-labelledby="studio-heading" hidden>
+        <header class="view-head fade-in">
+          <h1 id="studio-heading" class="view-title">Studio leaderboard</h1>
+          <p class="view-lede">Passphrase-gated results for the design team. Voters and submitters never see rank or win-rate.</p>
+        </header>
+
+        <form id="studio-gate" class="studio-gate fade-in">
+          <label class="gate__label" for="studio-pass">Studio passphrase</label>
+          <div class="gate__row">
+            <input id="studio-pass" name="passphrase" type="password" autocomplete="off" placeholder="Enter the studio passphrase">
+            <button type="submit" class="gate__submit">Unlock</button>
+          </div>
+          <p id="studio-error" role="alert"></p>
+        </form>
+
+        <div id="studio-board" class="studio-board" hidden></div>
+      </section>
+    </main>
+
+    <!-- Celebration toasts (badge unlocks, tier-ups, rank-ups) queue here one
+         at a time; polite live region so they announce without interrupting. -->
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  </div>
+</body>
+</html>
