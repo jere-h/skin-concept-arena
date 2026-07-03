@@ -21,6 +21,7 @@ import {
   SCOUT_POOL_SHARE,
   SCOUT_WINDOW_K,
   SCOUT_IDEATION,
+  SCOUT_IMAGES,
 } from '../game-config.js';
 // Only for the operational capacity warning below (how many scouts the
 // share cap can actually serve against the seeded human pool).
@@ -155,6 +156,51 @@ export function validateConfig(config, context = {}) {
     problems.push('SCOUT_IDEATION.banned_lexicon_extra must be an array (may be empty)');
   }
 
+  // Scout concept images — the optional image-generator MCP integration.
+  // The template ships valid even while disabled, so turning images on is
+  // a one-flag change, never a scramble to author a prompt under deadline.
+  const images = c.SCOUT_IMAGES || {};
+  if (typeof images.enabled !== 'boolean') {
+    problems.push(
+      'SCOUT_IMAGES.enabled must be a boolean — the drop validator keys its ' +
+        "image rules off it (false = every scout ships image_url '')"
+    );
+  }
+  if (!isNonEmptyString(images.generator)) {
+    problems.push(
+      'SCOUT_IMAGES.generator must name the image-generation MCP the drop ' +
+        "routine should look for (e.g. 'nanobanana')"
+    );
+  }
+  if (
+    !isNonEmptyString(images.asset_dir) ||
+    !images.asset_dir.endsWith('/') ||
+    images.asset_dir.startsWith('/') ||
+    images.asset_dir.includes('..')
+  ) {
+    problems.push(
+      'SCOUT_IMAGES.asset_dir must be a repo-relative directory with a ' +
+        "trailing slash (e.g. 'assets/scout-art/') — generated files commit there"
+    );
+  }
+  if (!isNonEmptyString(images.prompt_template)) {
+    problems.push(
+      'SCOUT_IMAGES.prompt_template must be non-empty — scout.buildImagePrompt ' +
+        'fills it per pitch for the image-generator MCP'
+    );
+  } else {
+    for (const placeholder of ['{seed_a}', '{seed_b}', '{slot}']) {
+      if (!images.prompt_template.includes(placeholder)) {
+        problems.push(
+          `SCOUT_IMAGES.prompt_template must contain ${placeholder} — the two ` +
+            'inspiration seeds and the cosmetic category are what make each ' +
+            'image prompt dynamic (the drop validator re-checks shipped ' +
+            'image_gen.prompts cite them)'
+        );
+      }
+    }
+  }
+
   return problems;
 }
 
@@ -174,6 +220,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       SCOUT_POOL_SHARE,
       SCOUT_WINDOW_K,
       SCOUT_IDEATION,
+      SCOUT_IMAGES,
     },
     { samplePitchCount: Array.isArray(SAMPLE_PITCHES) ? SAMPLE_PITCHES.length : 0 }
   );
@@ -184,7 +231,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(
       `game-config OK — "${GAME.name}" (${GAME.id}): ${ITEM_SLOTS.length} slots, ` +
         `${THEME_TAGS.length} tags, threshold ${COMPARISON_THRESHOLD}, ` +
-        `scout share ${SCOUT_POOL_SHARE}, window ${SCOUT_WINDOW_K}`
+        `scout share ${SCOUT_POOL_SHARE}, window ${SCOUT_WINDOW_K}, ` +
+        `images ${SCOUT_IMAGES && SCOUT_IMAGES.enabled ? 'on' : 'off'}`
     );
     process.exit(0);
   }

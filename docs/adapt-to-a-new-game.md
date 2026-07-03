@@ -52,7 +52,7 @@ Work in this order; each phase ends with a command that must pass.
 
 | # | File | Action |
 |---|------|--------|
-| 1 | `game-config.js` | Edit every `GAME-ADAPT` block: `GAME`, `STUDIO_PASSPHRASE`, `ITEM_SLOTS`, `THEME_TAGS`, `SCOUT_IDEATION` (visual_direction, off_limits, seed_guidance, banned_lexicon_extra). Leave the tuning constants unless the operator asks. |
+| 1 | `game-config.js` | Edit every `GAME-ADAPT` block: `GAME`, `STUDIO_PASSPHRASE`, `ITEM_SLOTS`, `THEME_TAGS`, `SCOUT_IDEATION` (visual_direction, off_limits, seed_guidance, banned_lexicon_extra), and `SCOUT_IMAGES` (rewrite `prompt_template` in the new game's art direction, keeping the required `{seed_a}`/`{seed_b}`/`{slot}` placeholders; leave `enabled: false` unless the operator asks for AI concept images and attaches an image-generator MCP to the drop routine's session). Leave the tuning constants unless the operator asks. |
 
 **Verify:** `node scripts/validate-config.mjs` → must exit 0 and print a
 `game-config OK — "<your game>" (<slug>): N slots, N tags, …` summary line

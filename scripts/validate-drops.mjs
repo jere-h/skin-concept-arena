@@ -21,7 +21,13 @@ import { SAMPLE_PITCHES } from '../sample-data.js';
 import { DEMO_PITCHES } from '../demo.js';
 // The game's cosmetic vocabulary and per-game lexicon additions come from
 // game-config.js — the single game-context source (GAME-ADAPT lives there).
-import { ITEM_SLOTS, THEME_TAGS, SCOUT_IDEATION, PITCH_LIMITS } from '../game-config.js';
+import {
+  ITEM_SLOTS,
+  THEME_TAGS,
+  SCOUT_IDEATION,
+  SCOUT_IMAGES,
+  PITCH_LIMITS,
+} from '../game-config.js';
 
 // --- The mechanical style rules --------------------------------------------
 
@@ -136,11 +142,103 @@ export function similarity(textA, textB) {
 
 // --- Per-pitch and per-drop checks ------------------------------------------
 
+/** Escape a literal string for use inside a RegExp source. */
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Image rules for one pitch, keyed off game-config SCOUT_IMAGES (`images`).
+ * Disabled (the default): image_url must be '' — placeholder art only.
+ * Enabled: image_url may ALSO be a data:image/ URI or a committed file
+ * named `<asset_dir><pitch-id>.<ext>`, never an external http(s) URL (design
+ * lock: zero external assets), and must carry image_gen provenance whose
+ * prompt demonstrably came from the template: it cites both inspiration
+ * seeds and the item_slot, and stays banned-lexicon-clean.
+ */
+function imageProblems(pitch, images, push) {
+  const cfg = images && typeof images === 'object' ? images : {};
+  const url = pitch.image_url;
+
+  if (typeof url !== 'string') {
+    push("image_url must be a string ('' or generated concept art)");
+    return;
+  }
+  if (url === '') {
+    if (pitch.image_gen !== undefined) {
+      push("image_gen present but image_url is '' — drop the stray provenance");
+    }
+    return;
+  }
+
+  if (cfg.enabled !== true) {
+    push(
+      "image_url must be '' while game-config.js SCOUT_IMAGES.enabled is " +
+        'false (placeholder art only)'
+    );
+    return;
+  }
+  if (/^(https?:)?\/\//i.test(url)) {
+    push('image_url must not be an external URL (design lock: zero external assets)');
+  }
+  const assetDir = typeof cfg.asset_dir === 'string' && cfg.asset_dir ? cfg.asset_dir : 'assets/scout-art/';
+  const isDataUri = /^data:image\//i.test(url);
+  const fileShape = new RegExp(
+    `^${escapeRegExp(assetDir)}${escapeRegExp(String(pitch.id))}\\.(png|jpe?g|webp|svg)$`
+  );
+  if (!isDataUri && !fileShape.test(url)) {
+    push(
+      `image_url must be '', a data:image/ URI, or ${assetDir}<pitch-id>.<png|jpg|jpeg|webp|svg>`
+    );
+  }
+
+  const gen = pitch.image_gen;
+  if (!gen || typeof gen !== 'object') {
+    push('image_gen { prompt, generator } provenance required when image_url is set');
+    return;
+  }
+  if (typeof gen.prompt !== 'string' || !gen.prompt.trim()) {
+    push('image_gen.prompt (the filled prompt_template) required');
+  } else {
+    const hay = gen.prompt.toLowerCase();
+    const sources =
+      pitch.inspiration && Array.isArray(pitch.inspiration.sources)
+        ? pitch.inspiration.sources.slice(0, 2)
+        : [];
+    for (const source of sources) {
+      const needle = String(source == null ? '' : source).toLowerCase().trim();
+      if (needle && !hay.includes(needle)) {
+        push(`image_gen.prompt must cite seed "${source}" (the template fuses both seeds)`);
+      }
+    }
+    if (
+      typeof pitch.item_slot === 'string' &&
+      !hay.includes(pitch.item_slot.toLowerCase())
+    ) {
+      push('image_gen.prompt must name the item_slot (the template is per-category)');
+    }
+    for (const hit of lexiconHits(gen.prompt)) {
+      push(`image_gen.prompt banned lexicon: "${hit}"`);
+    }
+  }
+  if (typeof gen.generator !== 'string' || !gen.generator.trim()) {
+    push("image_gen.generator must name what produced the image (e.g. 'nanobanana')");
+  }
+  if (
+    gen.generated_at !== undefined &&
+    (typeof gen.generated_at !== 'string' || Number.isNaN(Date.parse(gen.generated_at)))
+  ) {
+    push('image_gen.generated_at, when present, must be a parseable ISO string');
+  }
+}
+
 /**
  * Validate one scout pitch record. Returns an array of violation strings
  * (empty = clean). `vocab` carries { slots, tags } — the game-config lists.
+ * `images` (optional) overrides game-config SCOUT_IMAGES for the image
+ * rules; omit it to validate against the shipped config.
  */
-export function validatePitch(pitch, vocab) {
+export function validatePitch(pitch, vocab, images = SCOUT_IMAGES) {
   const problems = [];
   const where = pitch && pitch.id ? pitch.id : '(missing id)';
   const push = (msg) => problems.push(`${where}: ${msg}`);
@@ -152,7 +250,7 @@ export function validatePitch(pitch, vocab) {
   }
   if (pitch.owner_id !== null) push('owner_id must be null (belongs to no one)');
   if (pitch.origin !== 'scout') push("origin must be 'scout'");
-  if (pitch.image_url !== '') push("image_url must be '' (placeholder art only)");
+  imageProblems(pitch, images, push);
   if (typeof pitch.created_at !== 'string' || Number.isNaN(Date.parse(pitch.created_at))) {
     push('created_at must be a parseable ISO string');
   }
@@ -251,9 +349,10 @@ export function atlasSeedSet(atlas) {
  * other drops' pitches). `seedNames` (optional Set from atlasSeedSet) turns
  * on citation checking: every inspiration source and spark source must name
  * a real atlas seed — the "every concept fuses two atlas seeds" invariant,
- * made mechanical. Returns violation strings.
+ * made mechanical. `images` (optional) overrides game-config SCOUT_IMAGES
+ * for the per-pitch image rules. Returns violation strings.
  */
-export function validateDrop(drop, priorPitches, vocab, seedNames) {
+export function validateDrop(drop, priorPitches, vocab, seedNames, images) {
   const problems = [];
   const where = drop && drop.drop_id ? drop.drop_id : '(missing drop_id)';
   const push = (msg) => problems.push(`${where}: ${msg}`);
@@ -281,7 +380,7 @@ export function validateDrop(drop, priorPitches, vocab, seedNames) {
   }
 
   // Per-pitch field checks.
-  for (const pitch of pitches) problems.push(...validatePitch(pitch, vocab));
+  for (const pitch of pitches) problems.push(...validatePitch(pitch, vocab, images));
 
   // Drop-level spread: no repeated slot, >= tagSpreadFloor distinct tags.
   const slots = pitches.map((p) => p && p.item_slot);
@@ -375,9 +474,10 @@ export function validateDrop(drop, priorPitches, vocab, seedNames) {
 /**
  * Validate the full SCOUT_DROPS export against the samples + each other.
  * `atlas` (optional, parsed seed-atlas.json) turns on atlas structure checks
- * and per-drop seed-citation checks; the CLI always passes it.
+ * and per-drop seed-citation checks; the CLI always passes it. `images`
+ * (optional) overrides game-config SCOUT_IMAGES for the image rules.
  */
-export function validateAll(drops, samplePitches, vocab, atlas) {
+export function validateAll(drops, samplePitches, vocab, atlas, images) {
   const problems = [];
   const list = Array.isArray(drops) ? drops : [];
 
@@ -419,16 +519,39 @@ export function validateAll(drops, samplePitches, vocab, atlas) {
       prior.push(...(Array.isArray(other.pitches) ? other.pitches : []));
     }
     prior.push(...(Array.isArray(samplePitches) ? samplePitches : []));
-    problems.push(...validateDrop(drop, prior, vocab, seedNames));
+    problems.push(...validateDrop(drop, prior, vocab, seedNames, images));
   }
 
+  return problems;
+}
+
+/**
+ * Committed-file check for image_url values that point into the asset dir
+ * (data: URIs and empty strings are skipped): the referenced file must
+ * actually exist, or the Arena would render a broken image straight into a
+ * blind vote. Kept out of validateAll so the check functions stay pure /
+ * fs-free for browser-adjacent test use; the CLI (and gate) always runs it.
+ * `exists` is injectable for tests: (repoRelativePath) -> boolean.
+ */
+export function validateImageAssets(drops, exists) {
+  const problems = [];
+  for (const drop of Array.isArray(drops) ? drops : []) {
+    for (const pitch of Array.isArray(drop && drop.pitches) ? drop.pitches : []) {
+      const url = pitch && pitch.image_url;
+      if (typeof url !== 'string' || url === '' || /^data:/i.test(url)) continue;
+      if (/^(https?:)?\/\//i.test(url)) continue; // already a violation upstream
+      if (!exists(url)) {
+        problems.push(`${pitch.id}: image_url "${url}" is not a committed file`);
+      }
+    }
+  }
   return problems;
 }
 
 // --- CLI entry ---------------------------------------------------------------
 
 import { pathToFileURL } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 /** Load and parse scripts/seed-atlas.json; a parse failure is a violation. */
 export function loadAtlas() {
@@ -447,6 +570,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     problems.push(`seed-atlas: failed to load/parse scripts/seed-atlas.json (${err.message})`);
   }
   problems = problems.concat(validateAll(SCOUT_DROPS, corpus, vocab, atlas));
+  problems = problems.concat(
+    validateImageAssets(SCOUT_DROPS, (path) =>
+      existsSync(new URL(`../${path}`, import.meta.url))
+    )
+  );
   if (problems.length === 0) {
     const shipped = SCOUT_DROPS.reduce(
       (sum, drop) => sum + (Array.isArray(drop.pitches) ? drop.pitches.length : 0),

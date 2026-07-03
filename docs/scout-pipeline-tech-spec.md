@@ -1,6 +1,12 @@
 # Scout Pipeline — Technical Specification
 
-**Status:** implemented (rev 4 — see Review log at the bottom)
+**Status:** implemented (rev 5 — see Review log at the bottom)
+**Rev 5 note:** optional AI **concept images** via an image-generator MCP
+(e.g. Nano Banana), opt-in through `game-config.js` `SCOUT_IMAGES` and OFF
+by default. The prompt is templatized and dynamic — filled per pitch from
+its two inspiration seeds and its cosmetic category by
+`scout.buildImagePrompt` — and shipped images carry `image_gen` provenance
+the validator re-checks. See §1.1, §4.2.7, and §4.4.
 **Rev 4 note:** all game-specific values (identity, vocabulary, tuning,
 scout-ideation direction) moved to `game-config.js`, the single game-context
 hub, as part of the multi-game parameterization
@@ -31,7 +37,10 @@ Pitch {
   theme_tags    string[]        // MUST be from game-config.js THEME_TAGS for scouts
   title         string          // <= 80 chars (wizard parity)
   description   string          // <= 600 chars (wizard parity)
-  image_url     ''              // scouts ALWAYS '' — placeholder art only
+  image_url     string          // '' (placeholder art) — or, ONLY when
+                                // game-config SCOUT_IMAGES.enabled, generated
+                                // concept art: '<asset_dir><pitch-id>.<ext>'
+                                // or a data:image/ URI; never http(s) (§4.4)
   owner_id      null            // scouts belong to no one (sample-pitch shape)
   created_at    ISO string
 
@@ -40,6 +49,10 @@ Pitch {
   inspiration   { sources: string[], note: string }   // 2+ real-world seeds
   active_from   ISO string      // merge gate: pitch enters the pool on/after this
   retired       true            // rotation flag, set by the app; never deleted
+  image_gen     { prompt, generator, generated_at? }  // REQUIRED iff image_url
+                                // is non-empty: the filled prompt_template
+                                // (cites both seeds + the slot), the image
+                                // MCP/model used, and when (§4.4)
 }
 ```
 
@@ -131,6 +144,17 @@ composeArenaPool(pitches, share) -> pitches
  * Voting therefore never dead-ends behind the quota (rev 3, finding R1).
  */
 pickPairWithQuota(sampler, pitches, votes, seenPairs) -> { status, pair }
+
+/**
+ * Fill game-config SCOUT_IMAGES.prompt_template for one pitch (rev 5, §4.4):
+ * {seed_a}/{seed_b} from inspiration.sources, {slot} from item_slot, plus
+ * {title}/{tags}/{description} and any string vars in `context` (e.g.
+ * game_name, visual_direction — injected because this module imports
+ * nothing). Returns '' ("make no image") on an empty template or a pitch
+ * without two seeds; unknown {placeholders} stay verbatim so template typos
+ * surface instead of vanishing. Pure.
+ */
+buildImagePrompt(pitch, template, context) -> string
 ```
 
 ## 3. Integration points (modified files)
@@ -274,8 +298,12 @@ retires overused ones from rotation.
    pitch (samples + demo pitches + all drops — demo pitches battle in the
    same Arena whenever the demo profile is active; rev 3, finding R6);
    unique titles (case-insensitive).
-7. `image_url: ''` always (deterministic placeholder art; AI images are the
-   fastest slop tell and break the zero-external-assets lock).
+7. `image_url: ''` by default (deterministic placeholder art). When — and
+   only when — `game-config.js` `SCOUT_IMAGES.enabled` is true, a pitch MAY
+   instead ship AI concept art per §4.4: a committed file under
+   `SCOUT_IMAGES.asset_dir` named after the pitch id (or a data:image/ URI),
+   with `image_gen` provenance. External http(s) URLs are never valid
+   (zero-external-assets lock).
 8. **Stagger**: at most 2 pitches per `active_from` date within a drop.
 9. Ship 3–5 pitches per drop from >= 4x candidates; record the honest cull
    ratio in `stats`. 3–5 sparks per drop, same seed-fusion + lexicon rules.
@@ -305,6 +333,54 @@ Node script, zero dependencies, importable functions + CLI entry:
   invoke. `scripts/validate-data.mjs` (same pattern) covers the bundled
   sample/demo data: vote wiring, id collisions, vocabulary (fatal), and the
   demo ledger recomputed via progression.earnedBadges/pitchStatus.
+
+---
+
+### 4.4 Optional concept images (image-generator MCP) — rev 5
+
+Off by default; the whole feature keys off one flag. The original "no AI
+thumbnails" rule (`docs/ai-scout-pipeline-plan.md`, kill #11) was about
+unmetered, unlabeled, externally-hosted AI art; this reintroduction keeps
+each of those adjectives banned. **Operational runbook (step-by-step, for
+the agent actually doing it): `docs/image-generator-mcp-integration.md`.**
+
+- **Config (`game-config.js SCOUT_IMAGES`, GAME-ADAPT):** `enabled`
+  (boolean, default false), `generator` (the MCP to look for, e.g.
+  `'nanobanana'`), `asset_dir` (repo-relative, default
+  `'assets/scout-art/'`), and `prompt_template` — the templatized image
+  prompt. `{seed_a}`, `{seed_b}`, and `{slot}` are REQUIRED placeholders
+  (validate-config enforces): the two inspiration seeds and the cosmetic
+  category are what make each prompt dynamic. `{title}`, `{tags}`,
+  `{description}`, `{game_name}`, `{visual_direction}` also available.
+- **Prompt builder (`scout.buildImagePrompt(pitch, template, context)`):**
+  pure, zero-import (template + game context injected as parameters, the
+  same injection style as the sampler). Returns `''` — "make no image" —
+  when the template is empty or the pitch lacks its two seeds; unknown
+  placeholders stay verbatim so template typos are visible.
+- **Generation (routine STEP 4b, `docs/scout-routine.md`):** only when
+  `enabled` AND an image-generation MCP is attached to the routine's
+  session. One image per shipped pitch at most; the routine fills the
+  template, calls the MCP, commits the file as
+  `<asset_dir><pitch-id>.<png|jpg|jpeg|webp|svg>`, sets `image_url`, and
+  records `image_gen: { prompt, generator, generated_at }`. Any failure
+  (MCP absent, generation error, off-direction result) degrades to
+  `image_url: ''` — images never block a drop.
+- **Validator:** with `enabled` false, non-empty scout `image_url` is a
+  violation (the pre-rev-5 rule, unchanged). With it true: no external
+  http(s) URLs ever; file paths must match the pitch-id naming; `image_gen`
+  required, its `prompt` must cite both `inspiration.sources` and the
+  `item_slot` (the template made mechanical) and passes the banned-lexicon
+  scan; the CLI additionally checks referenced files exist on disk
+  (`validateImageAssets`).
+- **App:** zero code changes — `art.js makeArtZone` already renders any
+  non-empty `image_url` with placeholder fallback on load error, and the
+  Arena stays blind (an image renders the same whether a human linked it or
+  an MCP generated it). The Studio's provenance surface (`Scout` chip +
+  sources) already attributes the concept; `image_gen` rides along in the
+  record for anyone exporting feedback.
+- **Anti-slop posture:** the human PR gate now reviews images too — an
+  off-direction image is grounds to strip the image (ship `''`), not to
+  block the concept.
 
 ---
 
@@ -345,7 +421,9 @@ editorial gate.
 
 ## 7. Out of scope (deliberate)
 
-- No AI thumbnails; no external assets of any kind.
+- No external assets of any kind. (AI thumbnails, banned outright through
+  rev 4, are now the opt-in §4.4 path — committed same-origin files with
+  provenance, still never external, still off by default.)
 - No automatic cross-device vote aggregation (votes are device-local by
   architecture); the feedback loop runs through the Studio export.
 - No auto-merge of drop PRs; the human editorial gate is an anti-slop
