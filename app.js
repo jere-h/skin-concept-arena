@@ -335,6 +335,34 @@ function wireDemoToggle() {
   });
 }
 
+// --- Info tooltips (the Arena methodology "?") -------------------------------
+//
+// The markup is a native <details> popover, so it opens/closes with zero JS;
+// this wiring only adds the expected dismissals — Esc and clicking anywhere
+// outside — and fills [data-threshold] slots from COMPARISON_THRESHOLD so the
+// copy can never drift from the real tiering rule. Fail-safe: with no
+// .info-tip in the shell, nothing happens.
+
+function wireInfoTips() {
+  document.querySelectorAll('[data-threshold]').forEach((el) => {
+    el.textContent = String(COMPARISON_THRESHOLD);
+  });
+
+  const tips = document.querySelectorAll('details.info-tip');
+  if (!tips.length) return;
+  const closeAll = () => tips.forEach((tip) => tip.removeAttribute('open'));
+  document.addEventListener('click', (event) => {
+    const inside =
+      event.target instanceof Element && event.target.closest('details.info-tip');
+    tips.forEach((tip) => {
+      if (tip !== inside) tip.removeAttribute('open');
+    });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAll();
+  });
+}
+
 // --- Boot ------------------------------------------------------------------
 
 function bootViews(activeProfile) {
@@ -456,6 +484,7 @@ export function initApp() {
   bootViews(activeProfile);
   setupEntrance();
   wireDemoToggle();
+  wireInfoTips();
 
   // Land on the Submit view by default; all three remain reachable via nav.
   showView('submit');

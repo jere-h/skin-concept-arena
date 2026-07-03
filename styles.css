@@ -1432,3 +1432,130 @@ progress.meter::-moz-progress-bar {
     transition: none;
   }
 }
+
+/* ============================================================
+   Info tooltip — the Arena methodology "?" popover
+   ============================================================ */
+.view-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.info-tip {
+  position: relative;
+  flex: none;
+}
+
+/* The circular "?" trigger. A generous invisible hit area keeps the visual
+   chip small while honoring the tap floor. */
+.info-tip__trigger {
+  list-style: none; /* hide the details marker */
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-chip);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  user-select: none;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.info-tip__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.info-tip__trigger::after {
+  /* invisible tap-floor extension around the small chip */
+  content: '';
+  position: absolute;
+  inset: calc((var(--tap) - 24px) / -2);
+}
+
+.info-tip__trigger:hover,
+.info-tip[open] .info-tip__trigger {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The .fade-in view-head keeps will-change, so it IS a stacking context at
+   z-index auto — later siblings (the pitch cards) would paint over the open
+   panel. While a tip is open, raise the whole header above them. */
+.view-head:has(.info-tip[open]) {
+  position: relative;
+  z-index: 50;
+}
+
+.info-tip__panel {
+  position: absolute;
+  z-index: 50; /* above the sticky tabs, below the tutorial overlay (60) */
+  top: calc(100% + var(--space-2));
+  /* Anchor the panel's RIGHT edge to the trigger: the "?" sits at the end of
+     the heading, so the panel opens leftward, into the page, never off the
+     viewport's right edge. */
+  right: 0;
+  width: min(380px, calc(100vw - 48px));
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+/* On narrow screens a trigger-anchored panel can overflow whichever side
+   the trigger lands on (the title wraps), so anchor it to the full title
+   row instead: it opens as a row-wide sheet just below the heading.
+   (position: fixed is NOT an option here — the .fade-in ancestor keeps
+   will-change: transform, which turns it into the containing block.) */
+@media (max-width: 719px) {
+  .view-title-row {
+    position: relative;
+  }
+
+  .info-tip {
+    position: static;
+  }
+
+  .info-tip__panel {
+    top: calc(100% + var(--space-2));
+    left: 0;
+    right: 0;
+    width: auto;
+  }
+}
+
+.info-tip__title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.info-tip__panel p {
+  margin: 0 0 var(--space-3);
+}
+
+.info-tip__list {
+  margin: 0 0 var(--space-3);
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.info-tip__list strong {
+  color: var(--ink);
+}
+
+.info-tip__foot {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.8125rem;
+}

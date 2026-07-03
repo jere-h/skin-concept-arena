@@ -95,7 +95,37 @@
       <!-- ARENA VIEW -->
       <section id="view-arena" class="view" aria-labelledby="arena-heading" hidden>
         <header class="view-head fade-in">
-          <h1 id="arena-heading" class="view-title">Which would you rather see in-game?</h1>
+          <div class="view-title-row">
+            <h1 id="arena-heading" class="view-title">Which would you rather see in-game?</h1>
+            <!-- Methodology tooltip: a native <details> popover (app.js adds
+                 Esc/outside-click closing and fills [data-threshold]). -->
+            <details class="info-tip" id="arena-methodology">
+              <summary class="info-tip__trigger" aria-label="How head-to-head rankings work">?</summary>
+              <div class="info-tip__panel" role="note">
+                <h2 class="info-tip__title">How battles become rankings</h2>
+                <p>Every battle asks the same simple question, and your tap counts
+                  as one vote for the winner. Those votes power two things:</p>
+                <ol class="info-tip__list">
+                  <li><strong>Peak medals (additive).</strong> Once a concept has
+                    fought <span data-threshold>5</span> battles, its share of wins
+                    earns a tier medal — Bronze, Silver, Gold, or Diamond. Your
+                    Locker keeps the <em>best</em> tier each pitch has ever reached:
+                    peaks only move up, never down, and they add points to your
+                    career rank.</li>
+                  <li><strong>Studio popularity.</strong> The same votes build a
+                    win-rate leaderboard behind the Studio passphrase, which the
+                    design team uses to read community demand. Concepts with fewer
+                    than <span data-threshold>5</span> battles are flagged
+                    &ldquo;needs more votes&rdquo; instead of ranked, and exact
+                    win-rates stay studio-only — creators and voters see medals,
+                    never numbers.</li>
+                </ol>
+                <p class="info-tip__foot">Match-ups favor the least-battled
+                  concepts so new pitches calibrate fast, and you are never shown
+                  your own.</p>
+              </div>
+            </details>
+          </div>
           <p class="view-lede">Tap the concept you prefer. Your pick is recorded and a fresh pair loads.</p>
         </header>
 
