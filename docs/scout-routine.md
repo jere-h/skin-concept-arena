@@ -50,7 +50,9 @@ STEP 1 — absorb the contract. Read, in this order:
     creative contract: visual_direction and off_limits are binding on every
     candidate, seed_guidance governs how you use the atlas — and
     SCOUT_IMAGES, which decides whether STEP 4b applies to this run)
-  - docs/scout-pipeline-tech-spec.md (section 4 is your contract)
+  - docs/scout-pipeline-tech-spec.md (section 4 is your contract; §4.0 is
+    the determinism doctrine: structural values are computed, never
+    invented — your job is pairing seeds and writing copy, nothing else)
   - scripts/seed-atlas.json (your only source of inspiration seeds)
   - scout-data.js (every prior drop — you must not resemble or edit them)
   - sample-data.js and demo.js DEMO_PITCHES (more text you must not resemble)
@@ -60,16 +62,27 @@ STEP 1 — absorb the contract. Read, in this order:
     negative exemplars. If absent, use the strongest sample pitches as
     exemplars.)
 
-STEP 2 — generate wide. Draft at least 4x as many candidates as the ship
-ceiling (with the default 7-slot config: 20+). Every candidate
-fuses exactly TWO seeds from the atlas — the concept must be unimaginable
-without both — and sits INSIDE game-config.js SCOUT_IDEATION.visual_direction
-while touching nothing in off_limits. Do not reuse a seed used in either of
-the two most recent drops. Spread candidates across item slots and tonality
-tags. House voice, non-negotiable: 2–3 sentences; name at least one concrete
-material or real-world referent; describe silhouette and the one moment the
-concept shines in-game; end grounded with a restraint clause in the spirit
-of "reads as guardian, not villain"; no adjective stacks, nothing from the
+STEP 1.5 — scaffold. Run:
+  node scripts/next-drop.mjs
+It prints every STRUCTURAL value of your drop, computed from repo state:
+drop_id, id_prefix, generated_at, ship bounds, the candidate floor, the
+active_from schedule, created_at suggestions, and eligible_seeds — the
+exact seeds your pitches may cite (the atlas minus recently-used seeds
+minus anything appended this run). Use these values VERBATIM; the
+validator re-derives all of them and rejects deviations. Do not invent
+ids, dates, or cite seeds outside eligible_seeds.
+
+STEP 2 — generate wide. Draft at least the candidate floor the scaffold
+names (stats.generated must clear it). Every candidate fuses exactly TWO
+seeds from the scaffold's eligible_seeds — WHICH two is your creative
+call; pick fusions the concept would be unimaginable without, and never
+use one seed for two pitches in the drop. Every candidate sits INSIDE
+game-config.js SCOUT_IDEATION.visual_direction while touching nothing in
+off_limits. Spread candidates across item slots and tonality tags. House
+voice, non-negotiable: 2–3 sentences; name at least one concrete material
+or real-world referent; describe silhouette and the one moment the concept
+shines in-game; end grounded with a restraint clause in the spirit of
+"reads as guardian, not villain"; no adjective stacks, nothing from the
 banned lexicon in scripts/validate-drops.mjs (which already includes the
 game's banned_lexicon_extra), no AI-image talk in the COPY — image_url is
 '' at this stage regardless of SCOUT_IMAGES (images, if any, come in STEP
@@ -79,28 +92,27 @@ STEP 3 — cull hard. Score every candidate 1–5 on: concrete visualizability,
 silhouette readability at gameplay distance, producibility by a real art
 team, freshness against the entire existing pool, house-voice fit. Kill
 anything a game art director would eye-roll at. Ship the best drop the
-validator allows — the exact bounds DERIVE from the config vocabulary
-(defaults: 3-5 pitches, no two sharing an item_slot, 4+ distinct theme
-tags; small vocabularies shrink them — scripts/validate-drops.mjs is the
-authority and its failures name the numbers). Record the honest cull in
-stats: { generated: <candidates you actually drafted>, shipped: <count> }.
-Never pad either number.
+validator allows — the scaffold printed your ship bounds, and
+scripts/validate-drops.mjs is the authority on every count and cap (its
+failures name the numbers; never restate or guess them). Record the honest
+cull in stats: { generated: <candidates you actually drafted>, shipped:
+<count> }. Never pad either number.
 
 STEP 4 — assemble the drop. Append (never edit) a new drop object to
-SCOUT_DROPS in scout-data.js: drop_id 'drop-NNN' (increment; the validator
-enforces the format and uniqueness), generated_at = now, ids
-'scout-NNN-<slug>', owner_id null, origin 'scout', inspiration.sources
-naming your two seeds EXACTLY as they appear in scripts/seed-atlas.json
-(citations are validated against the atlas — a paraphrased seed name fails
-the gate) and inspiration.note giving the one-line design rationale.
-Stagger active_from: no earlier than the drop's generated_at date
-(activating on the generation date is the fastest legal start), at most 2
-per date, successive dates ~2 days apart. Also ship 3–5 sparks (seed pair +
+SCOUT_DROPS in scout-data.js using the scaffold's values verbatim:
+drop_id, generated_at, the id_prefix + a short slug per pitch, active_from
+from the printed schedule, created_at from the suggestions. owner_id null,
+origin 'scout', inspiration.sources naming your two seeds EXACTLY as they
+appear in scripts/seed-atlas.json (citations are validated against the
+atlas — a paraphrased seed name fails the gate) and inspiration.note
+giving the one-line design rationale. Also ship sparks (seed pair +
 one-line hook — an unfinished provocation a human completes, never a
-finished pitch; count and citations are validated too). Optionally append
-(never remove) up to 3 new seeds to scripts/seed-atlas.json if you found
-strong territories missing from it — appended entries must use the config
-vocabulary in their affinity lists (validated).
+finished pitch; the validator owns the count bounds and citation rules).
+Optionally append (never remove) up to 3 new seeds to
+scripts/seed-atlas.json if you found strong territories missing from it —
+appended entries must use the config vocabulary in their affinity lists
+and carry added_in: '<this drop_id>'; your own pitches cannot cite them
+(they become eligible next drop; both validated).
 
 STEP 4b — concept images (OPTIONAL; skip silently unless BOTH hold):
 game-config.js SCOUT_IMAGES.enabled is true, AND an image-generation MCP

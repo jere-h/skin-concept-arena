@@ -62,6 +62,20 @@ banned-cliché lexicon, dedupe checks, and house-voice rules — all enforced by
 `node scripts/gate.mjs`, the same gate CI runs. The Studio's feedback export
 closes the loop: what won last week steers what gets generated next week.
 
+The pipeline draws a deliberate line about **what is left to chance and what
+isn't**, so it's reliable without being repetitive:
+
+- **The machine owns everything structural** — a drop's id, its release
+  schedule, and which seeds are even eligible this week (no seed reused from
+  recent drops) are all *computed* by `scripts/next-drop.mjs` and re-checked
+  by the validator. The AI can't fumble these, and two runs on the same
+  repo produce the same setup every time.
+- **The AI owns the creative choices** — which eligible seeds to pair and
+  the words on the page. This part is intentionally *not* made repeatable:
+  the surprise is the point. It's kept honest by the mechanical gate, not by
+  forcing the same answer twice.
+- **A human owns taste** — the drop only ships if a person merges the PR.
+
 **Optional AI concept images:** attach an image-generator MCP (e.g. Nano
 Banana) to the routine and flip one config flag, and drops ship with concept
 art too. Prompts are never freehand — a per-pitch template is filled from the

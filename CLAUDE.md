@@ -34,10 +34,18 @@ one entrypoint, no drift. Its individual steps, when you need just one:
 
 ```
 node scripts/validate-config.mjs  # game-config contract
-node scripts/validate-data.mjs    # sample/demo integrity (votes, ledger, vocabulary)
-node scripts/validate-drops.mjs   # scout-drop + seed-atlas contract
+node scripts/validate-data.mjs    # sample/demo integrity (votes, ledger, vocabulary, feedback exports)
+node scripts/validate-drops.mjs   # scout-drop + seed-atlas contract (incl. seed eligibility)
+node scripts/next-drop.mjs        # scaffold the next drop: id, schedule, eligible seeds (routine STEP 1.5)
 node --test tests/logic.test.js tests/scout.test.js
 ```
+
+The Scout pipeline follows a strict determinism doctrine
+(`docs/scout-pipeline-tech-spec.md` §4.0): structural values (ids,
+schedules, seed eligibility) are computed by scripts and re-derived by the
+validator — never invented by a model; creative choices (seed pairing,
+copy, cull) stay stochastic but bounded and audited; taste stays human
+(the drop-PR review).
 
 ## Architecture invariants (do not break; tests enforce them)
 

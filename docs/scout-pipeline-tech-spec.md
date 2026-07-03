@@ -1,6 +1,17 @@
 # Scout Pipeline — Technical Specification
 
-**Status:** implemented (rev 5 — see Review log at the bottom)
+**Status:** implemented (rev 6 — see Review log at the bottom)
+**Rev 6 note ("deterministic pipeline"):** the determinism doctrine (§4.0)
+made explicit and mechanical. New: `scripts/next-drop.mjs` computes every
+structural value of the next drop (id, schedule, timestamps, seed
+eligibility); the validator re-derives the same values and enforces the
+objective ideation rules (seed recency, no self-citation of same-run atlas
+additions, intra-drop seed spread, consecutive drop numbering, the real 4x
+overgeneration floor, title near-duplicates, feedback-file schema). Rules
+tightened at rev 6 apply to drops generated on/after `PLAN_RULES_SINCE`
+(2026-07-04) — earlier drops are append-only and grandfathered. Simplified:
+the image path's data-URI variant is gone (committed files only) and the
+routine prompt no longer restates validator-owned numbers.
 **Rev 5 note:** optional AI **concept images** via an image-generator MCP
 (e.g. Nano Banana), opt-in through `game-config.js` `SCOUT_IMAGES` and OFF
 by default. The prompt is templatized and dynamic — filled per pitch from
@@ -40,7 +51,7 @@ Pitch {
   image_url     string          // '' (placeholder art) — or, ONLY when
                                 // game-config SCOUT_IMAGES.enabled, generated
                                 // concept art: '<asset_dir><pitch-id>.<ext>'
-                                // or a data:image/ URI; never http(s) (§4.4)
+                                // (committed file; never http(s)) (§4.4)
   owner_id      null            // scouts belong to no one (sample-pitch shape)
   created_at    ISO string
 
@@ -265,6 +276,27 @@ line), `.studio-toggle`, `.scout-report` (+ rows), `.export-btn`.
 The generation recipe lives with the generator, not the app. A drop is valid
 iff `node scripts/validate-drops.mjs` passes.
 
+### 4.0 Determinism doctrine (rev 6)
+
+The pipeline is engineered around a three-layer split; every rule below
+belongs to exactly one layer, and the layers are never blurred:
+
+| Layer | Owner | Determinism |
+|---|---|---|
+| **Structure** — drop ids/numbering, dates and stagger, seed *eligibility*, all validation, arena metering | code | Fully deterministic: `scripts/next-drop.mjs` computes it, `scripts/validate-drops.mjs` re-derives it, and the gate's verdict depends only on committed repo state (never wall clock, never model output) |
+| **Creativity** — which eligible seeds to pair, the pitch copy, the cull, image prompts (templatized) | model | Stochastic **by design**: the variance is the product. Reliability comes from bounding (eligibility, lexicon, dedupe, house-voice caps) and auditing (sources, stats, provenance all recorded), not from reproducibility |
+| **Taste** — the PR review, the feedback exports | human | Never automated |
+
+Two corollaries the rest of this section follows: (1) any rule that can be
+stated objectively moves to the structure layer and gets a validator check
+— it must be *impossible or mechanical*, never "the prompt says so"; (2)
+no rule may determinize the creativity layer — a seeded random pair menu,
+an LLM judge in CI, or auto-merge would each trade product quality or gate
+purity for a determinism nobody benefits from. Rules tightened after a
+drop shipped apply only to later drops (`PLAN_RULES_SINCE` grandfathering):
+drops are append-only, so retroactive rules would redden the gate on
+history nobody may edit.
+
 ### 4.1 Seed atlas — `scripts/seed-atlas.json`
 
 Curated, concrete, real-world references (other industries, crafts, nature,
@@ -277,11 +309,20 @@ history, sport, design culture — no borrowed game IP), each entry:
 ```
 
 Starts at ~60 entries; the routine may append entries (append-only) as it
-retires overused ones from rotation.
+retires overused ones from rotation. Appended entries carry
+`"added_in": "drop-NNN"` — the drop whose run added them. A run may never
+cite its own additions (§4.0's no-self-dealing rule, mechanical via the
+eligibility check): a new seed becomes citable from the NEXT drop.
 
 ### 4.2 Generation rules (enforced by validator where mechanical)
 
 1. Every concept fuses **two atlas seeds**; `inspiration.sources` names them.
+   Rev 6: the seeds must be **eligible** — not cited by pitches in the two
+   most recent drops, not appended by this same run — and no seed carries
+   two pitches within one drop. Eligibility is deterministic
+   (`scripts/seed-plan.mjs`): `node scripts/next-drop.mjs` prints the exact
+   set and the validator re-derives it. *Which* eligible seeds to pair is
+   the model's creative call (§4.0).
 2. Slot/tag vocabulary = the wizard's `ITEM_SLOTS` / `THEME_TAGS`, exactly.
 3. A drop **spans** slots and tags: no two pitches in a drop share the same
    item_slot; >= 4 distinct theme tags across the drop.
@@ -301,14 +342,20 @@ retires overused ones from rotation.
 7. `image_url: ''` by default (deterministic placeholder art). When — and
    only when — `game-config.js` `SCOUT_IMAGES.enabled` is true, a pitch MAY
    instead ship AI concept art per §4.4: a committed file under
-   `SCOUT_IMAGES.asset_dir` named after the pitch id (or a data:image/ URI),
-   with `image_gen` provenance. External http(s) URLs are never valid
-   (zero-external-assets lock).
+   `SCOUT_IMAGES.asset_dir` named after the pitch id, with `image_gen`
+   provenance. External http(s) URLs are never valid (zero-external-assets
+   lock); rev 6 removed the data-URI variant (one representation).
 8. **Stagger**: at most 2 pitches per `active_from` date within a drop.
-9. Ship 3–5 pitches per drop from >= 4x candidates; record the honest cull
-   ratio in `stats`. 3–5 sparks per drop, same seed-fusion + lexicon rules.
+9. Ship 3–5 pitches per drop from >= 4x candidates (mechanical from rev 6;
+   pre-rev-6 drops were validated at a 2x floor and stay grandfathered);
+   record the honest cull ratio in `stats`. 3–5 sparks per drop, same
+   seed-fusion + lexicon rules.
 10. Drops are append-only; a merged drop is never edited (device stores have
     already copied it).
+11. Rev 6: all structural values — drop id (consecutive numbering is
+    validated), active_from schedule, timestamps — come from
+    `node scripts/next-drop.mjs`, never invented by the model. Titles are
+    deduped by Jaccard similarity (> 0.3 fails), not just exact match.
 
 ### 4.3 `scripts/validate-drops.mjs`
 
@@ -324,9 +371,16 @@ Node script, zero dependencies, importable functions + CLI entry:
   size), stagger rule incl. `active_from >= generated_at`, spark count
   bounds, Jaccard dedupe vs samples + demo pitches + all drops.
 - **Seed-atlas gate**: scripts/seed-atlas.json must parse, hold 40+ unique
-  seeds with config-vocabulary affinities, and every `inspiration.sources` /
-  spark source must cite a real atlas seed by exact name — the "fuses two
-  atlas seeds" invariant, mechanical.
+  seeds with config-vocabulary affinities (plus well-formed `added_in`
+  stamps where present), and every `inspiration.sources` / spark source
+  must cite a real atlas seed by exact name — the "fuses two atlas seeds"
+  invariant, mechanical.
+- **Seed eligibility (rev 6, `PLAN_RULES_SINCE`-gated)**: recomputes the
+  deterministic eligible set per drop (scripts/seed-plan.mjs) and rejects
+  recency violations, self-citations of same-run atlas additions, and any
+  seed carrying two pitches in one drop. Consecutive drop numbering; 4x
+  overgeneration floor; title near-duplicate check. Feedback exports in
+  `feedback/*.json` are schema-checked by validate-data.mjs.
 - Exit 0 silent-ish on pass; exit 1 with a per-violation report on fail.
 - Runs inside `scripts/gate.mjs` (config → data → drops → tests), the one
   canonical gate CLAUDE.md, the adaptation guide, the routine, and CI all

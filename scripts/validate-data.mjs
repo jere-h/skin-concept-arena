@@ -245,6 +245,60 @@ export function demoLedgerViolations(data, threshold) {
   return problems;
 }
 
+/**
+ * Schema check for one studio feedback export (a `feedback/*.json` file).
+ * The feedback loop is the pipeline's steering input — the drop routine
+ * conditions next week's generation on these files — so a malformed export
+ * must fail the gate rather than silently degrade generation quality.
+ * `file` is { name, data }: the filename (for messages) and parsed JSON.
+ */
+export function validateFeedback(file) {
+  const problems = [];
+  const name = file && isNonEmptyString(file.name) ? file.name : '(feedback file)';
+  const push = (msg) => problems.push(`feedback ${name}: ${msg}`);
+  const data = file && file.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    push('must be a JSON object (a Studio "Export feedback" download)');
+    return problems;
+  }
+  if (typeof data.exported_at !== 'string' || Number.isNaN(Date.parse(data.exported_at))) {
+    push('exported_at must be a parseable ISO string');
+  }
+  if (!Array.isArray(data.scouts)) {
+    push('scouts must be an array (may be empty)');
+  } else {
+    for (const row of data.scouts) {
+      const id = row && isNonEmptyString(row.id) ? row.id : '(missing id)';
+      if (!row || typeof row !== 'object') {
+        push('scouts[] entries must be objects');
+        continue;
+      }
+      if (!isNonEmptyString(row.id)) push('scouts[] entry missing id');
+      if (!isNonEmptyString(row.title)) push(`scouts ${id}: title required`);
+      if (!Number.isFinite(row.comparisons)) push(`scouts ${id}: comparisons must be a number`);
+      if (!Number.isFinite(row.wins)) push(`scouts ${id}: wins must be a number`);
+      if (row.win_rate !== null && !Number.isFinite(row.win_rate)) {
+        push(`scouts ${id}: win_rate must be a number or null`);
+      }
+    }
+  }
+  if (!Array.isArray(data.top_human)) {
+    push('top_human must be an array (may be empty)');
+  } else {
+    for (const row of data.top_human) {
+      if (!row || typeof row !== 'object' || !isNonEmptyString(row.title)) {
+        push('top_human[] entries must be objects with a title');
+        continue;
+      }
+      if (!Number.isFinite(row.win_rate)) push(`top_human "${row.title}": win_rate must be a number`);
+      if (!Number.isFinite(row.comparisons)) {
+        push(`top_human "${row.title}": comparisons must be a number`);
+      }
+    }
+  }
+  return problems;
+}
+
 /** Validate all bundled data sets together. Returns problem strings. */
 export function validateAllData(data) {
   const problems = [];
@@ -295,6 +349,33 @@ export function validateAllData(data) {
 // --- CLI entry ---------------------------------------------------------------
 
 import { pathToFileURL } from 'node:url';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+
+/**
+ * Load and schema-check every feedback/*.json in the repo (the studio
+ * exports the drop routine conditions on). `dirUrl` must be a directory
+ * URL with a trailing slash. Missing directory = no files = no problems;
+ * a file that fails to parse is itself a violation.
+ */
+export function feedbackProblems(dirUrl) {
+  const problems = [];
+  if (!existsSync(dirUrl)) return problems;
+  let names = [];
+  try {
+    names = readdirSync(dirUrl).filter((name) => name.endsWith('.json'));
+  } catch (_err) {
+    return problems;
+  }
+  for (const name of names) {
+    try {
+      const raw = readFileSync(new URL(name, dirUrl), 'utf8');
+      problems.push(...validateFeedback({ name, data: JSON.parse(raw) }));
+    } catch (err) {
+      problems.push(`feedback ${name}: failed to load/parse (${err.message})`);
+    }
+  }
+  return problems;
+}
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const problems = validateAllData({
@@ -308,6 +389,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     vocab: { slots: ITEM_SLOTS, tags: THEME_TAGS },
     threshold: COMPARISON_THRESHOLD,
   });
+  // The steering input gets gated too: malformed studio exports in
+  // feedback/ would silently degrade the next generation run.
+  problems.push(...feedbackProblems(new URL('../feedback/', import.meta.url)));
   const fatal = problems.filter((p) => !p.startsWith('WARNING'));
   const warnings = problems.filter((p) => p.startsWith('WARNING'));
   for (const warning of warnings) console.warn(`  ! ${warning}`);

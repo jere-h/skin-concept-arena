@@ -38,6 +38,13 @@ import {
 } from '../scripts/validate-drops.mjs';
 import { validateConfig } from '../scripts/validate-config.mjs';
 import { imageJobs } from '../scripts/scout-image-prompts.mjs';
+import {
+  eligibleSeeds,
+  recentSeedNames,
+  dropNumber,
+} from '../scripts/seed-plan.mjs';
+import { nextDropId, activeFromSchedule } from '../scripts/next-drop.mjs';
+import { validateFeedback } from '../scripts/validate-data.mjs';
 import { validateAllData, validateVotes } from '../scripts/validate-data.mjs';
 import { validateAtlas, atlasSeedSet, loadAtlas } from '../scripts/validate-drops.mjs';
 import { SAMPLE_VOTES } from '../sample-data.js';
@@ -307,9 +314,8 @@ describe('scout-data.js — every bundled drop passes the full validator', () =>
         if (pitch.image_url === '') continue;
         assert.equal(images.enabled, true, `${pitch.id} ships an image while images are disabled`);
         assert.ok(
-          pitch.image_url.startsWith('data:image/') ||
-            pitch.image_url.startsWith(images.asset_dir),
-          `${pitch.id} image_url must be committed art or a data URI`
+          pitch.image_url.startsWith(images.asset_dir),
+          `${pitch.id} image_url must be a committed file under ${images.asset_dir}`
         );
         assert.ok(pitch.image_gen && pitch.image_gen.prompt, `${pitch.id} missing image_gen provenance`);
       }
@@ -480,11 +486,11 @@ describe('validate-drops — image rules (SCOUT_IMAGES-gated)', () => {
     assert.ok(problems.some((p) => p.includes('external URL')), problems.join('\n'));
   });
 
-  test('file naming is pitch-id-exact; data:image URIs are accepted', () => {
+  test('file naming is pitch-id-exact; data:image URIs are rejected (one representation)', () => {
     const misnamed = imagedScout('name', { image_url: 'assets/scout-art/whatever.png' });
     assert.ok(imageProblemsOf(misnamed, IMAGES_ON).some((p) => p.includes('<pitch-id>')));
     const dataUri = imagedScout('data', { image_url: 'data:image/png;base64,AAAA' });
-    assert.deepEqual(imageProblemsOf(dataUri, IMAGES_ON), []);
+    assert.ok(imageProblemsOf(dataUri, IMAGES_ON).some((p) => p.includes('<pitch-id>')));
   });
 
   test('image_gen provenance is required and its prompt must cite both seeds + the slot', () => {
@@ -762,6 +768,316 @@ describe('validate-drops — atlas gate, seed citations, sparks, stagger', () =>
     const problems = validateDrop(d, [], VOCAB);
     assert.ok(problems.some((p) => p.includes('sparks; must ship')), problems.join('\n'));
     assert.ok(problems.some((p) => p.includes('predates')), problems.join('\n'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6f. The deterministic seed plan + drop scaffolder (rev 6)
+// ---------------------------------------------------------------------------
+
+describe('seed-plan — deterministic eligibility, recomputable by the validator', () => {
+  const atlas = {
+    seeds: [
+      { seed: 'Alpha craft', affinity: { slots: ['Character Skin'], tags: ['Gritty'] } },
+      { seed: 'Beta trade', affinity: {} },
+      { seed: 'Gamma nature', affinity: {} },
+      { seed: 'Delta history', affinity: {} },
+      { seed: 'Fresh addition', added_in: 'drop-003', affinity: {} },
+    ],
+  };
+  const priorDrop = (id, seedPairs) =>
+    drop(
+      seedPairs.map((pair, i) =>
+        scoutPitch(`scout-${id}-${i}`, '2026-01-01T00:00:00.000Z', {
+          inspiration: { sources: pair, note: 'n' },
+        })
+      ),
+      { drop_id: id }
+    );
+
+  test('recency window: pitch seeds from the two most recent drops are out', () => {
+    const priors = [
+      priorDrop('drop-001', [['Alpha craft', 'Beta trade']]),
+      priorDrop('drop-002', [['Gamma nature', 'Delta history']]),
+      priorDrop('drop-003', [['Beta trade', 'Fresh addition']]),
+    ];
+    // Window is the two NEWEST drops (002, 003): 001's seeds are eligible again.
+    const recent = recentSeedNames(priors);
+    assert.ok(recent.has('gamma nature') && recent.has('fresh addition'));
+    assert.ok(!recent.has('alpha craft'), 'seeds from drop-001 rotate back in');
+
+    const plan = eligibleSeeds('drop-004', atlas, priors);
+    const names = plan.eligible.map((e) => e.seed);
+    assert.deepEqual(names, ['Alpha craft'], names.join(', '));
+    assert.ok(plan.excludedRecent.includes('beta trade'));
+  });
+
+  test('same-run atlas additions are ineligible for their own drop only', () => {
+    const forOwn = eligibleSeeds('drop-003', atlas, []);
+    assert.ok(!forOwn.eligible.some((e) => e.seed === 'Fresh addition'));
+    const forNext = eligibleSeeds('drop-004', atlas, []);
+    assert.ok(forNext.eligible.some((e) => e.seed === 'Fresh addition'));
+  });
+
+  test('deterministic and canonical: same inputs, same output, name-sorted', () => {
+    const a = eligibleSeeds('drop-002', atlas, []);
+    const b = eligibleSeeds('drop-002', { seeds: atlas.seeds.slice().reverse() }, []);
+    assert.deepEqual(
+      a.eligible.map((e) => e.seed),
+      b.eligible.map((e) => e.seed),
+      'atlas array order must not matter'
+    );
+    const sorted = a.eligible.map((e) => e.seed.toLowerCase());
+    assert.deepEqual(sorted, sorted.slice().sort());
+  });
+
+  test('scaffold structure: next id increments; stagger schedule is gate-legal', () => {
+    assert.equal(nextDropId([]), 'drop-001');
+    assert.equal(nextDropId([{ drop_id: 'drop-002' }, { drop_id: 'drop-001' }]), 'drop-003');
+    assert.equal(dropNumber('drop-012'), 12);
+    assert.equal(dropNumber('dropX'), null);
+    assert.deepEqual(activeFromSchedule('2026-07-10T09:00:00.000Z', 5), [
+      '2026-07-10',
+      '2026-07-10',
+      '2026-07-12',
+      '2026-07-12',
+      '2026-07-14',
+    ]);
+    assert.deepEqual(activeFromSchedule('not a date', 3), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6g. Rev-6 strict rules — mechanical, and grandfathered before PLAN_RULES_SINCE
+// ---------------------------------------------------------------------------
+
+describe('validate-drops — rev-6 strict rules bite only after PLAN_RULES_SINCE', () => {
+  // A strict-era drop: generated after the cutover, activation legal.
+  function strictScout(id, over = {}) {
+    return validScout(id, { active_from: '2026-07-10', ...over });
+  }
+  function strictDrop(pitches, over = {}) {
+    return drop(pitches, {
+      drop_id: 'drop-002',
+      generated_at: '2026-07-10T00:00:00.000Z',
+      stats: { generated: pitches.length * 4, shipped: pitches.length },
+      ...over,
+    });
+  }
+
+  test('4x overgeneration floor for strict drops; legacy drops keep 2x', () => {
+    const thin = strictDrop([strictScout('thin')], {
+      stats: { generated: 3, shipped: 1 },
+    });
+    assert.ok(
+      validateDrop(thin, [], VOCAB).some((p) => p.includes('under 4x shipped')),
+      'strict drop at 3x fails'
+    );
+    const legacy = drop([validScout('legacy')], { stats: { generated: 3, shipped: 1 } });
+    assert.ok(
+      !validateDrop(legacy, [], VOCAB).some((p) => p.includes('under')),
+      'legacy drop at 3x (>= 2x) passes'
+    );
+  });
+
+  test('title near-duplicates are rejected in strict drops, exact-only in legacy', () => {
+    const prior = validScout('prior', { title: 'Ashwalker Brigade' });
+    const near = strictScout('near', {
+      title: 'Ashwalker Company',
+      description:
+        'A varnished oak buckler rimmed in rope splice work, referenced from ' +
+        'lifeboat fittings; the paint is worn exactly where a forearm rests.',
+    });
+    assert.ok(
+      validateDrop(strictDrop([near]), [prior], VOCAB).some((p) =>
+        p.includes('title too similar')
+      )
+    );
+    const legacyNear = validScout('legacynear', {
+      title: 'Ashwalker Company',
+      description: near.description,
+    });
+    assert.ok(
+      !validateDrop(drop([legacyNear]), [prior], VOCAB).some((p) =>
+        p.includes('title too similar')
+      )
+    );
+  });
+
+  test('no seed carries two pitches within one strict drop', () => {
+    const a = strictScout('a', { item_slot: 'Character Skin' });
+    const b = strictScout('b', {
+      item_slot: 'Headgear',
+      title: 'Second Concept',
+      description:
+        'A watch cap knitted from tarred marline with a bone toggle at the ' +
+        'brow, referenced from harbor pilots; it darkens when rain soaks it.',
+      inspiration: {
+        sources: ['Dockworker canvas gear', 'Carousel horse carving'], // reuses a
+        note: 'n',
+      },
+    });
+    const problems = validateDrop(strictDrop([a, b]), [], VOCAB);
+    assert.ok(problems.some((p) => p.includes('already carries')), problems.join('\n'));
+  });
+
+  test('seed recency across drops is mechanical (validateAll)', () => {
+    const first = drop([validScout('one')], { drop_id: 'drop-001' });
+    const reuser = strictScout('two', {
+      title: 'Different Entirely',
+      description:
+        'A boiled-wool watch cap with a stamped brass badge over the brow, ' +
+        'referenced from harbor pilot uniforms; the badge is worn to a shine.',
+      // Reuses a seed drop-001's pitch cited.
+      inspiration: { sources: ['Dockworker canvas gear', 'Harbor pilot brass'], note: 'n' },
+    });
+    const problems = validateAll([first, strictDrop([reuser])], [], VOCAB);
+    assert.ok(
+      problems.some((p) => p.includes('most recent drops')),
+      problems.join('\n')
+    );
+  });
+
+  test('a run cannot cite an atlas seed it just appended (added_in)', () => {
+    const selfDealer = strictScout('self', {
+      inspiration: { sources: ['Dockworker canvas gear', 'Brand New Seed'], note: 'n' },
+    });
+    const atlas = {
+      seeds: [
+        { seed: 'Dockworker canvas gear', affinity: {} },
+        { seed: 'Brand New Seed', added_in: 'drop-002', affinity: {} },
+      ],
+    };
+    const problems = validateAll([strictDrop([selfDealer])], [], VOCAB, atlas);
+    assert.ok(
+      problems.some((p) => p.includes('may not cite its own additions')),
+      problems.join('\n')
+    );
+  });
+
+  test('drop numbering must be consecutive', () => {
+    const gapped = [
+      drop([validScout('g1')], { drop_id: 'drop-001' }),
+      drop([validScout('g3', { title: 'Other Title Words' })], { drop_id: 'drop-003' }),
+    ];
+    const problems = validateAll(gapped, [], VOCAB);
+    assert.ok(problems.some((p) => p.includes('numbering has a gap')), problems.join('\n'));
+  });
+
+  test('lexicon matches at word starts: variants caught, embeddings not', () => {
+    assert.deepEqual(lexiconHits('they unleashed chaos'), ['unleash']);
+    assert.deepEqual(lexiconHits('the annexus of ideas'), []);
+    assert.deepEqual(lexiconHits('a cosmic-scale joke'), ['cosmic']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6h. Feedback exports — the steering input is schema-gated
+// ---------------------------------------------------------------------------
+
+describe('validate-data — feedback exports are schema-checked', () => {
+  test('a well-formed studio export passes', () => {
+    const good = {
+      name: 'arena-feedback.json',
+      data: {
+        exported_at: '2026-07-10T00:00:00.000Z',
+        scouts: [
+          { id: 'scout-001-x', title: 'X', comparisons: 5, wins: 3, win_rate: 0.6, retired: false },
+        ],
+        top_human: [
+          { title: 'Y', description: 'd', theme_tags: ['Gritty'], item_slot: 'Emote', win_rate: 0.7, comparisons: 9 },
+        ],
+      },
+    };
+    assert.deepEqual(validateFeedback(good), []);
+  });
+
+  test('malformed exports are named violations, not silent degradation', () => {
+    const bad = {
+      name: 'broken.json',
+      data: {
+        exported_at: 'yesterday-ish',
+        scouts: [{ title: 'no id', comparisons: 'many' }],
+        top_human: 'not an array',
+      },
+    };
+    const problems = validateFeedback(bad);
+    assert.ok(problems.some((p) => p.includes('exported_at')));
+    assert.ok(problems.some((p) => p.includes('missing id')));
+    assert.ok(problems.some((p) => p.includes('top_human')));
+    assert.ok(validateFeedback({ name: 'x.json', data: [] }).length > 0, 'arrays rejected');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6i. Property tests — the metering invariants hold on random pools
+// ---------------------------------------------------------------------------
+
+describe('scout metering — property-tested invariants (seeded random pools)', () => {
+  // Tiny deterministic PRNG so failures reproduce exactly.
+  function prng(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  test('composeArenaPool never exceeds the share cap, never drops a human', () => {
+    const rand = prng(0xc0ffee);
+    for (let trial = 0; trial < 300; trial++) {
+      const humanCount = Math.floor(rand() * 9);
+      const scoutCount = Math.floor(rand() * 9);
+      const share = [0, 0.05, 0.2, 0.4, 0.6, 0.9, 1.5][Math.floor(rand() * 7)];
+      const pool = [];
+      for (let i = 0; i < humanCount; i++) pool.push(human(`h${trial}-${i}`));
+      for (let i = 0; i < scoutCount; i++) {
+        pool.push(scoutPitch(`s${trial}-${i}`, `2026-02-${String((i % 27) + 1).padStart(2, '0')}T00:00:00.000Z`));
+      }
+      const result = scout.composeArenaPool(pool, share);
+      const humansKept = result.filter((p) => !scout.isScout(p)).length;
+      const scoutsKept = result.filter(scout.isScout).length;
+      const label = `trial ${trial}: h=${humanCount} s=${scoutCount} share=${share}`;
+      if (humanCount < 2) {
+        assert.equal(result, pool, `${label}: survival mode returns the pool untouched`);
+        continue;
+      }
+      assert.equal(humansKept, humanCount, `${label}: no human ever dropped`);
+      const clamped = Math.min(0.9, Math.max(0, share));
+      if (clamped === 0) {
+        assert.equal(scoutsKept, 0, `${label}: share 0 is the off switch`);
+        continue;
+      }
+      const cap = Math.max(1, Math.floor((humanCount * clamped) / (1 - clamped)));
+      assert.ok(scoutsKept <= cap, `${label}: ${scoutsKept} scouts kept exceeds cap ${cap}`);
+      if (scoutCount > 0) {
+        assert.ok(scoutsKept >= 1, `${label}: positive share keeps minimum exposure`);
+      }
+    }
+  });
+
+  test('pickPairWithQuota never serves two scouts while any human exists', () => {
+    const rand = prng(0xbad5eed);
+    for (let trial = 0; trial < 300; trial++) {
+      const humanCount = Math.floor(rand() * 5);
+      const scoutCount = Math.floor(rand() * 5);
+      if (humanCount + scoutCount < 2) continue;
+      const pool = [];
+      for (let i = 0; i < humanCount; i++) pool.push(human(`h${trial}-${i}`));
+      for (let i = 0; i < scoutCount; i++) pool.push(scoutPitch(`s${trial}-${i}`));
+      const result = scout.pickPairWithQuota(sampler, pool, [], new Set());
+      if (result.status !== 'ok') continue;
+      const scoutsServed = result.pair.filter(scout.isScout).length;
+      if (humanCount > 0) {
+        assert.ok(
+          scoutsServed <= 1,
+          `trial ${trial}: pair holds ${scoutsServed} scouts with ${humanCount} humans in pool`
+        );
+      }
+    }
   });
 });
 
