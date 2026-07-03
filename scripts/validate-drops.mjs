@@ -77,6 +77,9 @@ export const DESC_MIN = 80; // substance floor: no one-liner slop (anti-slop, no
 export const MAX_SENTENCES = 3;
 export const MAX_PER_ACTIVE_DATE = 2; // stagger rule within a drop
 export const SIMILARITY_LIMIT = 0.4; // token-Jaccard ceiling vs any other pitch
+export const SPARKS_MIN = 3; // every drop carries inspiration sparks
+export const SPARKS_MAX = 5;
+export const ATLAS_MIN_SEEDS = 40; // the routine needs room to combine
 
 // Drop-shape bounds DERIVE from the configured vocabulary so a game with a
 // small slot or tag list still has a satisfiable contract: the tag-spread
@@ -190,11 +193,67 @@ export function validatePitch(pitch, vocab) {
 }
 
 /**
+ * Validate the seed atlas itself. The atlas is the routine's ONLY source of
+ * inspiration AND the routine has append rights to it, so a malformed or
+ * off-vocabulary entry committed this week silently breaks NEXT week's run
+ * — this check keeps that failure at the gate instead. Returns violations.
+ */
+export function validateAtlas(atlas, vocab) {
+  const problems = [];
+  if (!atlas || !Array.isArray(atlas.seeds)) {
+    return ['seed-atlas: must be an object with a seeds[] array'];
+  }
+  if (atlas.seeds.length < ATLAS_MIN_SEEDS) {
+    problems.push(
+      `seed-atlas: only ${atlas.seeds.length} seeds; keep ${ATLAS_MIN_SEEDS}+ ` +
+        'so the routine has room to combine'
+    );
+  }
+  const seen = new Set();
+  for (const entry of atlas.seeds) {
+    const name = entry && entry.seed;
+    if (typeof name !== 'string' || !name.trim()) {
+      problems.push('seed-atlas: entry with missing/empty seed name');
+      continue;
+    }
+    const key = name.toLowerCase().trim();
+    if (seen.has(key)) problems.push(`seed-atlas: duplicate seed "${name}"`);
+    seen.add(key);
+    const affinity = entry.affinity || {};
+    for (const slot of Array.isArray(affinity.slots) ? affinity.slots : []) {
+      if (!vocab.slots.includes(slot)) {
+        problems.push(`seed-atlas "${name}": affinity slot "${slot}" is not in game-config.js ITEM_SLOTS`);
+      }
+    }
+    for (const tag of Array.isArray(affinity.tags) ? affinity.tags : []) {
+      if (!vocab.tags.includes(tag)) {
+        problems.push(`seed-atlas "${name}": affinity tag "${tag}" is not in game-config.js THEME_TAGS`);
+      }
+    }
+  }
+  return problems;
+}
+
+/** Case-insensitive set of atlas seed names, for citation checks. */
+export function atlasSeedSet(atlas) {
+  const names = new Set();
+  for (const entry of atlas && Array.isArray(atlas.seeds) ? atlas.seeds : []) {
+    if (entry && typeof entry.seed === 'string') {
+      names.add(entry.seed.toLowerCase().trim());
+    }
+  }
+  return names;
+}
+
+/**
  * Validate a whole drop (shape, spread, stagger, ship count) plus each pitch.
  * `priorPitches` is every pitch this drop must not resemble (samples + all
- * other drops' pitches). Returns violation strings.
+ * other drops' pitches). `seedNames` (optional Set from atlasSeedSet) turns
+ * on citation checking: every inspiration source and spark source must name
+ * a real atlas seed — the "every concept fuses two atlas seeds" invariant,
+ * made mechanical. Returns violation strings.
  */
-export function validateDrop(drop, priorPitches, vocab) {
+export function validateDrop(drop, priorPitches, vocab, seedNames) {
   const problems = [];
   const where = drop && drop.drop_id ? drop.drop_id : '(missing drop_id)';
   const push = (msg) => problems.push(`${where}: ${msg}`);
@@ -233,17 +292,41 @@ export function validateDrop(drop, priorPitches, vocab) {
     push(`only ${tagSpread.size} distinct theme tags; needs ${spreadFloor}+`);
   }
 
-  // Stagger: at most MAX_PER_ACTIVE_DATE pitches per active_from date.
+  // Stagger: at most MAX_PER_ACTIVE_DATE pitches per active_from date, and
+  // nothing activates before the drop was generated (day granularity —
+  // activating ON the generation date is the fastest legal start).
+  const generatedDate =
+    typeof drop.generated_at === 'string' ? drop.generated_at.slice(0, 10) : '';
   const perDate = new Map();
   for (const pitch of pitches) {
     const date = pitch && pitch.active_from;
     if (typeof date !== 'string') continue;
     perDate.set(date, (perDate.get(date) || 0) + 1);
+    if (generatedDate && date.slice(0, 10) < generatedDate) {
+      push(`${pitch.id}: active_from ${date} predates the drop's generated_at date`);
+    }
   }
   for (const [date, count] of perDate) {
     if (count > MAX_PER_ACTIVE_DATE) {
       push(`${count} pitches activate on ${date}; stagger to <= ${MAX_PER_ACTIVE_DATE} per date`);
     }
+  }
+
+  // Seed citations (when an atlas seed set is provided): every inspiration
+  // source and every spark source must name a REAL atlas seed — "each
+  // concept fuses two atlas seeds" is the core anti-slop invariant, so a
+  // hallucinated citation is a gate failure, not a style nit.
+  function checkSources(sources, where) {
+    if (!(seedNames instanceof Set) || seedNames.size === 0) return;
+    for (const source of Array.isArray(sources) ? sources : []) {
+      const key = String(source == null ? '' : source).toLowerCase().trim();
+      if (!seedNames.has(key)) {
+        push(`${where}: source "${source}" is not a seed in scripts/seed-atlas.json`);
+      }
+    }
+  }
+  for (const pitch of pitches) {
+    if (pitch && pitch.inspiration) checkSources(pitch.inspiration.sources, pitch.id);
   }
 
   // Dedupe: title uniqueness and description similarity vs everything prior
@@ -268,8 +351,11 @@ export function validateDrop(drop, priorPitches, vocab) {
     others.push(pitch); // siblings check each other, each pair once
   }
 
-  // Sparks: well-formed, two seeds, lexicon-clean hooks.
+  // Sparks: count-bounded, well-formed, two REAL seeds, lexicon-clean hooks.
   const sparks = Array.isArray(drop.sparks) ? drop.sparks : [];
+  if (sparks.length < SPARKS_MIN || sparks.length > SPARKS_MAX) {
+    push(`ships ${sparks.length} sparks; must ship ${SPARKS_MIN}-${SPARKS_MAX}`);
+  }
   for (const spark of sparks) {
     const sid = spark && spark.id ? spark.id : '(missing spark id)';
     if (!spark || typeof spark.id !== 'string') push(`${sid}: spark id required`);
@@ -279,16 +365,27 @@ export function validateDrop(drop, priorPitches, vocab) {
     if (!spark || typeof spark.hook !== 'string' || !spark.hook.trim()) {
       push(`${sid}: spark hook required`);
     }
+    if (spark) checkSources(spark.sources, sid);
     for (const hit of lexiconHits(spark && spark.hook)) push(`${sid}: banned lexicon: "${hit}"`);
   }
 
   return problems;
 }
 
-/** Validate the full SCOUT_DROPS export against the samples + each other. */
-export function validateAll(drops, samplePitches, vocab) {
+/**
+ * Validate the full SCOUT_DROPS export against the samples + each other.
+ * `atlas` (optional, parsed seed-atlas.json) turns on atlas structure checks
+ * and per-drop seed-citation checks; the CLI always passes it.
+ */
+export function validateAll(drops, samplePitches, vocab, atlas) {
   const problems = [];
   const list = Array.isArray(drops) ? drops : [];
+
+  let seedNames = null;
+  if (atlas !== undefined && atlas !== null) {
+    problems.push(...validateAtlas(atlas, vocab));
+    seedNames = atlasSeedSet(atlas);
+  }
 
   // Drop ids: unique and 'drop-NNN'-shaped (the routine's increment contract
   // — docs/scout-routine.md STEP 4 — made mechanical).
@@ -322,7 +419,7 @@ export function validateAll(drops, samplePitches, vocab) {
       prior.push(...(Array.isArray(other.pitches) ? other.pitches : []));
     }
     prior.push(...(Array.isArray(samplePitches) ? samplePitches : []));
-    problems.push(...validateDrop(drop, prior, vocab));
+    problems.push(...validateDrop(drop, prior, vocab, seedNames));
   }
 
   return problems;
@@ -331,17 +428,35 @@ export function validateAll(drops, samplePitches, vocab) {
 // --- CLI entry ---------------------------------------------------------------
 
 import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+
+/** Load and parse scripts/seed-atlas.json; a parse failure is a violation. */
+export function loadAtlas() {
+  const raw = readFileSync(new URL('./seed-atlas.json', import.meta.url), 'utf8');
+  return JSON.parse(raw);
+}
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const vocab = { slots: ITEM_SLOTS, tags: THEME_TAGS };
   const corpus = SAMPLE_PITCHES.concat(DEMO_PITCHES);
-  const problems = validateAll(SCOUT_DROPS, corpus, vocab);
+  let atlas = null;
+  let problems = [];
+  try {
+    atlas = loadAtlas();
+  } catch (err) {
+    problems.push(`seed-atlas: failed to load/parse scripts/seed-atlas.json (${err.message})`);
+  }
+  problems = problems.concat(validateAll(SCOUT_DROPS, corpus, vocab, atlas));
   if (problems.length === 0) {
     const shipped = SCOUT_DROPS.reduce(
       (sum, drop) => sum + (Array.isArray(drop.pitches) ? drop.pitches.length : 0),
       0
     );
-    console.log(`scout drops OK — ${SCOUT_DROPS.length} drop(s), ${shipped} pitches, 0 violations`);
+    const seeds = atlas && Array.isArray(atlas.seeds) ? atlas.seeds.length : 0;
+    console.log(
+      `scout drops OK — ${SCOUT_DROPS.length} drop(s), ${shipped} pitches, ` +
+        `${seeds}-seed atlas, 0 violations`
+    );
     process.exit(0);
   }
   console.error(`scout drops FAILED — ${problems.length} violation(s):`);

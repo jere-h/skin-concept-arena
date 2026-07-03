@@ -140,6 +140,8 @@ function templateMarkup() {
         '<p class="step-eyebrow">03 · Words</p>' +
         '<div class="field">' +
           '<label class="field-label" for="wizard-title">Title</label>' +
+          // GAME-ADAPT (optional): the example title below is
+          // Emberhold-flavored copy — swap it for one that fits your game.
           '<input id="wizard-title" class="field-input" name="title" type="text" ' +
             'maxlength="' + PITCH_LIMITS.title_max + '" ' +
             'placeholder="e.g. Tidebreaker Vanguard" required>' +

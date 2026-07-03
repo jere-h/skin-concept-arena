@@ -18,8 +18,11 @@
     <header class="masthead">
       <div class="masthead__brand">
         <p class="wordmark">Skin Concept Arena</p>
-        <!-- Fixed-game context chip; app.js fills [data-game-name] slots. -->
-        <span class="game-chip" data-game-name>Emberhold</span>
+        <!-- Fixed-game context chip: app.js fills every [data-game-name]
+             slot from game-config.js at boot. Deliberately EMPTY pre-boot so
+             no hardcoded game name can outlive an adaptation or flash before
+             the config-driven fill. -->
+        <span class="game-chip" data-game-name></span>
         <!-- Masthead utilities: demo-profile switch + tour replay (app.js
              wires both; the demo button relabels itself when demo is active). -->
         <div class="masthead__actions">

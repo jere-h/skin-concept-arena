@@ -57,20 +57,27 @@ function artHue2(id) {
 }
 
 // Item-slot glyphs as stroke path data (viewBox 0 0 64 40, drawn around the
-// center). Keys are lowercase KEYWORDS matched against the slot name, so both
-// the configured slots ("Weapon Skin", "Headgear", ...) and the bundled
-// sample slots ("Weapon", "Outfit", "Back Accessory", ...) resolve to a shape;
-// anything unrecognized falls back to the diamond mark.
+// center). Keys are lowercase KEYWORDS matched per-word against the slot
+// name (a keyword matches a whole word or a word's prefix — 'head' matches
+// "Headgear" but NOT "Figurehead"), so both the configured slots ("Weapon
+// Skin", "Headgear", ...) and the bundled sample slots resolve to a shape;
+// anything unrecognized falls back to the diamond mark. Generic suffix words
+// like 'skin' are deliberately NOT keywords — "Weapon Skin" must resolve by
+// 'weapon', never by its suffix.
 //
 // GAME-ADAPT (optional): if the new game-config.js ITEM_SLOTS introduces
-// categories none of these keywords match (e.g. "Goal Explosion",
-// "Banner"), placeholder art still works — unmatched slots wear the neutral
-// diamond — but adding a { match: [...keywords], paths: [...] } entry per
-// new category keeps the art distinct. Stroke paths only, viewBox 0 0 64 40.
+// categories these keywords don't cover, placeholder art still works —
+// unmatched slots wear the neutral diamond — but adding a
+// { match: [...keywords], paths: [...] } entry per new category keeps the
+// art distinct. Two rules when you do: CHECK WHAT EACH NEW SLOT ACTUALLY
+// MATCHES (a false match — the wrong glyph — is worse than the diamond;
+// probe with: node -e "import('./art.js').then(a => console.log(a.slotGlyphPaths('Your Slot')))"),
+// and keep keywords specific (no generic suffixes). Stroke paths only,
+// viewBox 0 0 64 40.
 const SLOT_GLYPHS = [
   // figure: head + shoulders (Character Skin / Outfit)
   {
-    match: ['character', 'outfit', 'skin'],
+    match: ['character', 'outfit'],
     paths: [
       'M27.5 13a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0 -9 0',
       'M23 31c1.5-7 4.5-10 9-10s7.5 3 9 10',
@@ -112,11 +119,21 @@ const SLOT_GLYPHS = [
 // tier diamond is a filled 4-point spark; see locker.js).
 const DEFAULT_GLYPH = ['M32 12l9 8-9 8-9-8Z'];
 
-/** Path data for a slot name (keyword match, case-insensitive). */
-function slotGlyphPaths(slot) {
-  const name = String(slot == null ? '' : slot).toLowerCase();
+/**
+ * Path data for a slot name. A keyword hits only when some WORD of the slot
+ * name starts with it ('head' → "Headgear" ✓, "Figurehead" ✗; 'weapon' →
+ * "Weapon Skin" ✓), which kills the substring false-matches the old
+ * `includes` scan allowed. Exported for the glyph-resolution tests.
+ */
+export function slotGlyphPaths(slot) {
+  const words = String(slot == null ? '' : slot)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
   for (const glyph of SLOT_GLYPHS) {
-    if (glyph.match.some((word) => name.includes(word))) return glyph.paths;
+    if (glyph.match.some((keyword) => words.some((word) => word.startsWith(keyword)))) {
+      return glyph.paths;
+    }
   }
   return DEFAULT_GLYPH;
 }

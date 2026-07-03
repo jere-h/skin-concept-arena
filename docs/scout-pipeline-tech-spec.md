@@ -287,11 +287,24 @@ retires overused ones from rotation.
 Node script, zero dependencies, importable functions + CLI entry:
 
 - Schema/field checks per §1.1–1.2 (incl. `scout-` id prefix, id uniqueness
-  across all drops, owner_id null, origin 'scout', empty image_url).
-- Vocabulary checks against game-config.js's ITEM_SLOTS / THEME_TAGS.
-- Length caps, sentence cap, banned lexicon, per-drop slot/tag spread,
-  stagger rule, Jaccard dedupe vs `SAMPLE_PITCHES` + all drops.
+  across all drops, `drop-NNN` drop_id format + uniqueness, owner_id null,
+  origin 'scout', empty image_url).
+- Vocabulary checks against game-config.js's ITEM_SLOTS / THEME_TAGS; length
+  caps from game-config.js PITCH_LIMITS (wizard parity by construction).
+- Sentence cap, banned lexicon (base + the game's banned_lexicon_extra),
+  per-drop slot/tag spread and ship counts (both derived from vocabulary
+  size), stagger rule incl. `active_from >= generated_at`, spark count
+  bounds, Jaccard dedupe vs samples + demo pitches + all drops.
+- **Seed-atlas gate**: scripts/seed-atlas.json must parse, hold 40+ unique
+  seeds with config-vocabulary affinities, and every `inspiration.sources` /
+  spark source must cite a real atlas seed by exact name — the "fuses two
+  atlas seeds" invariant, mechanical.
 - Exit 0 silent-ish on pass; exit 1 with a per-violation report on fail.
+- Runs inside `scripts/gate.mjs` (config → data → drops → tests), the one
+  canonical gate CLAUDE.md, the adaptation guide, the routine, and CI all
+  invoke. `scripts/validate-data.mjs` (same pattern) covers the bundled
+  sample/demo data: vote wiring, id collisions, vocabulary (fatal), and the
+  demo ledger recomputed via progression.earnedBadges/pitchStatus.
 
 ---
 

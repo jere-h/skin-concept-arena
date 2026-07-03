@@ -30,9 +30,11 @@ drop" — a small batch of AI-developed skin concepts — exactly per the repo's
 own contract, validate it mechanically, and open a PR for human review. You
 never merge your own PR.
 
-STEP 0 — the valve. Check open PRs. If a previous scout drop PR is still
-open, stop: comment nothing, change nothing, end the run. One drop in review
-at a time.
+STEP 0 — the valve. List this repo's open pull requests (gh: `gh pr list
+--state open --json headRefName,title`; or your GitHub tooling). If any open
+PR's head branch starts with `scout/`, a previous drop is still in review:
+stop — comment nothing, change nothing, end the run. One drop in review at a
+time. Open PRs on other branches are NOT yours to worry about; proceed.
 
 STEP 1 — absorb the contract. Read, in this order:
   - game-config.js (the game context: GAME identity, ITEM_SLOTS and
@@ -49,7 +51,8 @@ STEP 1 — absorb the contract. Read, in this order:
     negative exemplars. If absent, use the strongest sample pitches as
     exemplars.)
 
-STEP 2 — generate wide. Draft at least 20 candidate concepts. Every candidate
+STEP 2 — generate wide. Draft at least 4x as many candidates as the ship
+ceiling (with the default 7-slot config: 20+). Every candidate
 fuses exactly TWO seeds from the atlas — the concept must be unimaginable
 without both — and sits INSIDE game-config.js SCOUT_IDEATION.visual_direction
 while touching nothing in off_limits. Do not reuse a seed used in either of
@@ -64,25 +67,34 @@ game's banned_lexicon_extra), no AI-image talk — image_url is always ''.
 STEP 3 — cull hard. Score every candidate 1–5 on: concrete visualizability,
 silhouette readability at gameplay distance, producibility by a real art
 team, freshness against the entire existing pool, house-voice fit. Kill
-anything a game art director would eye-roll at. Ship the best 3–5 — no two
-sharing an item_slot, 4+ distinct theme tags across the drop. Record the
-honest cull in stats: { generated: <candidates you actually drafted>,
-shipped: <count> }. Never pad either number.
+anything a game art director would eye-roll at. Ship the best drop the
+validator allows — the exact bounds DERIVE from the config vocabulary
+(defaults: 3-5 pitches, no two sharing an item_slot, 4+ distinct theme
+tags; small vocabularies shrink them — scripts/validate-drops.mjs is the
+authority and its failures name the numbers). Record the honest cull in
+stats: { generated: <candidates you actually drafted>, shipped: <count> }.
+Never pad either number.
 
 STEP 4 — assemble the drop. Append (never edit) a new drop object to
-SCOUT_DROPS in scout-data.js: drop_id 'drop-NNN' (increment), generated_at =
-now, ids 'scout-NNN-<slug>', owner_id null, origin 'scout',
-inspiration.sources naming your two seeds and inspiration.note giving the
-one-line design rationale. Stagger active_from: first concepts +2 days from
-today, at most 2 per date, ~2 days apart. Also ship 3–5 sparks (seed pair +
+SCOUT_DROPS in scout-data.js: drop_id 'drop-NNN' (increment; the validator
+enforces the format and uniqueness), generated_at = now, ids
+'scout-NNN-<slug>', owner_id null, origin 'scout', inspiration.sources
+naming your two seeds EXACTLY as they appear in scripts/seed-atlas.json
+(citations are validated against the atlas — a paraphrased seed name fails
+the gate) and inspiration.note giving the one-line design rationale.
+Stagger active_from: no earlier than the drop's generated_at date
+(activating on the generation date is the fastest legal start), at most 2
+per date, successive dates ~2 days apart. Also ship 3–5 sparks (seed pair +
 one-line hook — an unfinished provocation a human completes, never a
-finished pitch). Optionally append (never remove) up to 3 new seeds to
-scripts/seed-atlas.json if you found strong territories missing from it.
+finished pitch; count and citations are validated too). Optionally append
+(never remove) up to 3 new seeds to scripts/seed-atlas.json if you found
+strong territories missing from it — appended entries must use the config
+vocabulary in their affinity lists (validated).
 
-STEP 5 — validate mechanically. Run:
-  node scripts/validate-drops.mjs
-  node --test tests/logic.test.js tests/scout.test.js
-Fix and re-run until both are fully clean. Do not weaken a rule, the
+STEP 5 — validate mechanically. Run the canonical gate (the same command
+CI runs on your PR):
+  node scripts/gate.mjs
+Fix and re-run until it exits 0. Do not weaken a rule, the
 validator, or a test to get there — if a concept can't pass, cut it and
 promote the next-best candidate.
 
@@ -91,7 +103,8 @@ atlas if touched), push, open a PR titled "Scout drop NNN: <the drop's range
 in 3-5 words>". PR body: a table of shipped concepts (title, slot, tags, the
 two seeds), the cull ratio with one line on WHY the strongest kills were
 killed, and which feedback exemplars (if any) steered you. Do not merge. Do
-not push to main. End the run after the PR is open.
+not push to main. Your PR is done when it is OPEN and its CI check (the same
+gate you ran in STEP 5) is green; end the run then.
 ```
 
 ## Design notes
