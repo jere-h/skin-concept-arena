@@ -53,3 +53,4 @@ python3 -m http.server                                # run the app (any static 
 - `docs/scout-pipeline-tech-spec.md` — the Scout pipeline contract (data shapes, module APIs, drop rules)
 - `docs/scout-routine.md` — the recurring drop-authoring routine + its prompt
 - `docs/ai-scout-pipeline-plan.md` — the design rationale (anti-slop guardrails)
+- `docs/vote-backend-tech-spec.md` — proposed shared vote/pitch backend (LLM-implementable spec; not yet built)
