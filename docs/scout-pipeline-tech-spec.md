@@ -341,7 +341,8 @@ Node script, zero dependencies, importable functions + CLI entry:
 Off by default; the whole feature keys off one flag. The original "no AI
 thumbnails" rule (`docs/ai-scout-pipeline-plan.md`, kill #11) was about
 unmetered, unlabeled, externally-hosted AI art; this reintroduction keeps
-each of those adjectives banned.
+each of those adjectives banned. **Operational runbook (step-by-step, for
+the agent actually doing it): `docs/image-generator-mcp-integration.md`.**
 
 - **Config (`game-config.js SCOUT_IMAGES`, GAME-ADAPT):** `enabled`
   (boolean, default false), `generator` (the MCP to look for, e.g.

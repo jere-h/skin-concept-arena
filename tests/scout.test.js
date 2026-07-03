@@ -37,6 +37,7 @@ import {
   sentenceCount,
 } from '../scripts/validate-drops.mjs';
 import { validateConfig } from '../scripts/validate-config.mjs';
+import { imageJobs } from '../scripts/scout-image-prompts.mjs';
 import { validateAllData, validateVotes } from '../scripts/validate-data.mjs';
 import { validateAtlas, atlasSeedSet, loadAtlas } from '../scripts/validate-drops.mjs';
 import { SAMPLE_VOTES } from '../sample-data.js';
@@ -512,6 +513,36 @@ describe('validate-drops — image rules (SCOUT_IMAGES-gated)', () => {
     };
     const problems = imageProblemsOf(sloppy, IMAGES_ON);
     assert.ok(problems.some((p) => p.includes('banned lexicon: "ethereal"')), problems.join('\n'));
+  });
+
+  test('imageJobs emits verbatim-usable jobs only for image-less pitches with two seeds', () => {
+    const done = imagedScout('done'); // already has art — no job
+    const pending = validScout('pending', {
+      title: 'Second Test Concept',
+      item_slot: 'Headgear',
+      description:
+        'A boiled-wool watch cap with a stamped brass badge over the brow, ' +
+        'referenced from harbor pilot uniforms; the badge is worn to a shine.',
+    });
+    const seedless = validScout('seedless', {
+      title: 'Third Test Concept',
+      item_slot: 'Mount',
+      inspiration: { sources: ['only one seed'], note: 'n' },
+    });
+    const jobs = imageJobs([drop([done, pending, seedless])], IMAGES_ON, {
+      game_name: 'Emberhold',
+    });
+    assert.equal(jobs.length, 1, 'one job: not the imaged pitch, not the seedless one');
+    assert.equal(jobs[0].pitch_id, 'scout-pending');
+    assert.equal(jobs[0].target_file, 'assets/scout-art/scout-pending.png');
+    // The emitted prompt satisfies the validator's citation rules by
+    // construction — wire it into the pitch and the gate stays green.
+    const shipped = {
+      ...pending,
+      image_url: jobs[0].target_file,
+      image_gen: { prompt: jobs[0].prompt, generator: 'nanobanana' },
+    };
+    assert.deepEqual(imageProblemsOf(shipped, IMAGES_ON), []);
   });
 
   test("stray image_gen on an image-less pitch is rejected; missing files are caught by the CLI's asset check", () => {

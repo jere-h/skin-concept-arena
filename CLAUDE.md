@@ -62,5 +62,7 @@ node --test tests/logic.test.js tests/scout.test.js
 - `docs/adapt-to-a-new-game.md` — repurpose the repo for another game (LLM-optimized)
 - `docs/scout-pipeline-tech-spec.md` — the Scout pipeline contract (data shapes, module APIs, drop rules)
 - `docs/scout-routine.md` — the recurring drop-authoring routine + its prompt
+- `docs/image-generator-mcp-integration.md` — enable/operate/debug AI concept
+  images via an image-generator MCP (nanobanana etc.); LLM-optimized runbook
 - `docs/ai-scout-pipeline-plan.md` — the design rationale (anti-slop guardrails)
 - `docs/vote-backend-tech-spec.md` — proposed shared vote/pitch backend (LLM-implementable spec; not yet built)

@@ -3,7 +3,10 @@
 Committed home for **optional AI-generated scout concept images** — the
 image-generator-MCP integration described in
 `docs/scout-pipeline-tech-spec.md` §4.4 and authored by the drop routine's
-STEP 4b (`docs/scout-routine.md`).
+STEP 4b (`docs/scout-routine.md`). **Implementing or debugging the
+integration? Follow `docs/image-generator-mcp-integration.md`** — the
+ordered, gate-verified runbook (prompts come from
+`node scripts/scout-image-prompts.mjs`, never freehand).
 
 The contract (enforced by `scripts/validate-drops.mjs`):
 

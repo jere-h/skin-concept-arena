@@ -27,6 +27,7 @@ the routine never merges its own work.
    ships text-only drops (STEP 4b degrades to a no-op). The image prompt is
    templatized in `SCOUT_IMAGES.prompt_template` — tune the template, and
    every future drop's images tune with it, same as the ideation direction.
+   Full setup/operate/debug runbook: `docs/image-generator-mcp-integration.md`.
 
 ## The routine prompt
 
@@ -104,22 +105,21 @@ vocabulary in their affinity lists (validated).
 STEP 4b — concept images (OPTIONAL; skip silently unless BOTH hold):
 game-config.js SCOUT_IMAGES.enabled is true, AND an image-generation MCP
 tool is available in your session (look for the server SCOUT_IMAGES.generator
-names, e.g. nanobanana; any MCP that returns an image file works). When both
-hold, for each shipped pitch — never for culled candidates:
-  1. Build the prompt with the repo's own template filler; do not freehand:
-       node -e "import('./scout.js').then(async (s) => {
-         const g = await import('./game-config.js');
-         const pitch = /* the pitch object */;
-         console.log(s.buildImagePrompt(pitch, g.SCOUT_IMAGES.prompt_template,
-           { game_name: g.GAME.name,
-             visual_direction: g.SCOUT_IDEATION.visual_direction }));
-       })"
-  2. Call the image MCP with that prompt, one image per pitch. Save the
-     file as SCOUT_IMAGES.asset_dir + '<pitch-id>.png' (or the actual
-     format returned: jpg/jpeg/webp/svg).
-  3. On the pitch, set image_url to that repo-relative path and add
-     image_gen: { prompt: <the exact filled prompt from step 1>,
-     generator: <the MCP/model you called>, generated_at: <now ISO> }.
+names, e.g. nanobanana; any MCP tool that accepts a text prompt and returns
+an image file works). When both hold, follow the dedicated runbook —
+docs/image-generator-mcp-integration.md — which is the authority for this
+step. Condensed:
+  1. Run `node scripts/scout-image-prompts.mjs` (after STEP 4's data is in
+     scout-data.js): it prints one JSON job per shipped image-less pitch —
+     pitch_id, target_file, and the filled template prompt. Never freehand
+     a prompt; use the emitted one verbatim.
+  2. Call the image MCP once per job; save the result at exactly
+     target_file (swap the extension to match the returned format:
+     png/jpg/jpeg/webp/svg).
+  3. In scout-data.js, REPLACE the pitch's existing image_url '' value
+     (never add a second image_url key) with the repo-relative path, and
+     add image_gen: { prompt: <the exact emitted prompt>, generator:
+     <the MCP/model you called>, generated_at: <now ISO> }.
   4. Eyeball each image against SCOUT_IDEATION.visual_direction and
      off_limits. An off-direction, text-bearing, or watermarked image is
      stripped, not shipped: keep the pitch, set image_url back to ''.
