@@ -1,5 +1,11 @@
 // scout-data.js
 //
+// GAME-ADAPT: drops are game-specific. When adapting to a new game, RESET
+// this to `export const SCOUT_DROPS = [];` (the app, tests, and validator
+// all tolerate an empty drops list) and let the scout-drop routine
+// (docs/scout-routine.md) author the new game's Drop 001 under the new
+// game-config.js SCOUT_IDEATION direction. Hand-audit that first drop.
+//
 // Committed Scout drops — AI-developed skin concepts merged into the pool at
 // boot (scout.js), plus the wizard's inspiration sparks. Same bundled-data
 // pattern as sample-data.js: an ES module, no fetch, no build step, works
@@ -8,7 +14,8 @@
 // Rules that keep this file honest (validated by scripts/validate-drops.mjs):
 //   - Every concept fuses TWO seeds from scripts/seed-atlas.json and cites
 //     them in inspiration.sources, with a one-line rationale note.
-//   - Wizard vocabulary only (ITEM_SLOTS / THEME_TAGS), wizard length caps.
+//   - game-config.js vocabulary only (ITEM_SLOTS / THEME_TAGS), wizard
+//     length caps.
 //   - owner_id null (belongs to no one: everyone's Arena, no one's Locker),
 //     image_url '' (deterministic placeholder art — never AI images).
 //   - active_from staggers a drop into the pool a couple of concepts at a

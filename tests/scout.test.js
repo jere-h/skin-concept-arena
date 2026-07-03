@@ -24,7 +24,8 @@ import * as sampler from '../sampler.js';
 import { SCOUT_DROPS } from '../scout-data.js';
 import { SAMPLE_PITCHES } from '../sample-data.js';
 import { DEMO_PITCHES } from '../demo.js';
-import { ITEM_SLOTS, THEME_TAGS } from '../wizard.js';
+import { ITEM_SLOTS, THEME_TAGS } from '../game-config.js';
+import * as gameConfig from '../game-config.js';
 import {
   validateAll,
   validateDrop,
@@ -32,6 +33,7 @@ import {
   similarity,
   sentenceCount,
 } from '../scripts/validate-drops.mjs';
+import { validateConfig } from '../scripts/validate-config.mjs';
 
 const VOCAB = { slots: ITEM_SLOTS, tags: THEME_TAGS };
 const NOW = '2026-07-10T12:00:00.000Z';
@@ -283,7 +285,8 @@ describe('scout-data.js — every bundled drop passes the full validator', () =>
   });
 
   test('drops ship the documented shape (owner-less, art-less, sourced)', () => {
-    assert.ok(SCOUT_DROPS.length >= 1, 'at least Drop 001 ships');
+    // An empty SCOUT_DROPS is legal (a freshly adapted game starts with no
+    // drops); whatever IS bundled must carry the contract shape.
     for (const dropEntry of SCOUT_DROPS) {
       for (const pitch of dropEntry.pitches) {
         assert.equal(pitch.owner_id, null);
@@ -346,7 +349,7 @@ describe('validate-drops — the anti-slop rules reject what they must', () => {
     });
     const problems = validateDrop(drop([a, b, c]), [], VOCAB);
     assert.ok(problems.some((p) => p.includes('share an item_slot')));
-    assert.ok(problems.some((p) => p.includes('not in the wizard')));
+    assert.ok(problems.some((p) => p.includes('not in game-config.js')));
     assert.ok(problems.some((p) => p.includes('stagger')));
   });
 
@@ -355,6 +358,36 @@ describe('validate-drops — the anti-slop rules reject what they must', () => {
     const thin = validScout('thin', { description: 'Too short to mean anything.' });
     const problems = validateDrop(drop([thin]), [], VOCAB);
     assert.ok(problems.some((p) => p.includes('substance floor')));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6b. game-config — the bundled config passes its own validator
+// ---------------------------------------------------------------------------
+
+describe('game-config.js — the bundled config passes validate-config', () => {
+  test('zero fatal violations for the shipped config', () => {
+    const problems = validateConfig(gameConfig).filter(
+      (p) => !p.startsWith('WARNING')
+    );
+    assert.deepEqual(problems, []);
+  });
+
+  test('the validator has teeth: broken configs are rejected', () => {
+    const broken = {
+      ...gameConfig,
+      GAME: { id: 'Bad Slug!', name: '' },
+      ITEM_SLOTS: ['Only One'],
+      THEME_TAGS: ['A', 'a', ''],
+      SCOUT_POOL_SHARE: 0,
+      SCOUT_IDEATION: {},
+    };
+    const problems = validateConfig(broken);
+    assert.ok(problems.some((p) => p.includes('GAME')), 'identity checked');
+    assert.ok(problems.some((p) => p.includes('ITEM_SLOTS')), 'slot floor checked');
+    assert.ok(problems.some((p) => p.includes('unique')), 'tag uniqueness checked');
+    assert.ok(problems.some((p) => p.includes('SCOUT_POOL_SHARE')), 'share range checked');
+    assert.ok(problems.some((p) => p.includes('visual_direction')), 'ideation checked');
   });
 });
 
@@ -377,9 +410,12 @@ describe('access split — scout modules stay score-free (static scan)', () => {
     return specs;
   }
 
-  test('scout.js imports nothing at all; scout-data.js imports nothing', () => {
+  test('scout.js, scout-data.js, and game-config.js import nothing at all', () => {
     assert.deepEqual(importSpecifiers('scout.js'), []);
     assert.deepEqual(importSpecifiers('scout-data.js'), []);
+    // game-config.js is pure data importable from ANY module (views, pure
+    // logic, node scripts) precisely because it imports nothing itself.
+    assert.deepEqual(importSpecifiers('game-config.js'), []);
   });
 
   test('wizard.js gained only the scout-data import (no ranking/progression)', () => {

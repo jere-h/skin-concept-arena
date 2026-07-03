@@ -1,6 +1,11 @@
 # Scout Pipeline — Technical Specification
 
-**Status:** implemented (rev 3 — see Review log at the bottom)
+**Status:** implemented (rev 4 — see Review log at the bottom)
+**Rev 4 note:** all game-specific values (identity, vocabulary, tuning,
+scout-ideation direction) moved to `game-config.js`, the single game-context
+hub, as part of the multi-game parameterization
+(`docs/adapt-to-a-new-game.md`). Where this spec says "wizard vocabulary",
+read "game-config.js vocabulary".
 **Parent:** `docs/ai-scout-pipeline-plan.md` (the 3-iteration brainstorm this
 spec implements)
 
@@ -22,8 +27,8 @@ after the progression add-on. A pre-scout pitch is byte-for-byte valid.
 ```
 Pitch {
   id            string          // scout ids are prefixed 'scout-'
-  item_slot     string          // MUST be one of wizard.js ITEM_SLOTS for scouts
-  theme_tags    string[]        // MUST be from wizard.js THEME_TAGS for scouts
+  item_slot     string          // MUST be one of game-config.js ITEM_SLOTS for scouts
+  theme_tags    string[]        // MUST be from game-config.js THEME_TAGS for scouts
   title         string          // <= 80 chars (wizard parity)
   description   string          // <= 600 chars (wizard parity)
   image_url     ''              // scouts ALWAYS '' — placeholder art only
@@ -211,8 +216,9 @@ The "Need a spark?" panel — attacks the human-ideation bottleneck directly:
 - Shows one spark: the seed pair ("Venetian glassblowing × storm-chaser
   vans") and its one-line hook, plus an **"Another spark"** button that
   cycles (random start index, then sequential — no repeat until wraparound).
-- `wizard.js` gains named exports `ITEM_SLOTS` and `THEME_TAGS` (non-breaking)
-  so the validator and the routine share the app's real vocabulary.
+- The cosmetic vocabulary (`ITEM_SLOTS` / `THEME_TAGS`) lives in
+  `game-config.js` (rev 4) — the wizard, the validator, the coverage badges,
+  and the routine all read the same lists from there.
 - Still imports neither ranking nor progression (guard re-asserts).
 
 ### 3.5 `index.html`
@@ -282,7 +288,7 @@ Node script, zero dependencies, importable functions + CLI entry:
 
 - Schema/field checks per §1.1–1.2 (incl. `scout-` id prefix, id uniqueness
   across all drops, owner_id null, origin 'scout', empty image_url).
-- Vocabulary checks against the wizard's exported lists.
+- Vocabulary checks against game-config.js's ITEM_SLOTS / THEME_TAGS.
 - Length caps, sentence cap, banned lexicon, per-drop slot/tag spread,
   stagger rule, Jaccard dedupe vs `SAMPLE_PITCHES` + all drops.
 - Exit 0 silent-ish on pass; exit 1 with a per-violation report on fail.

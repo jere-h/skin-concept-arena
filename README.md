@@ -8,6 +8,16 @@ Four views: **Submit** (the guided pitch wizard), **Arena** (blind head-to-head
 voting), **Locker** (your private progression hub), and **Studio** (the
 passphrase-gated exact-numbers leaderboard).
 
+## Reusing this repo for another game
+
+All game context (identity, cosmetic slots, tonality tags, tuning, AI-ideation
+direction) is parameterized behind **`game-config.js`**, and every
+game-specific site carries a greppable `GAME-ADAPT` marker. The ordered,
+mechanically-verified adaptation checklist — written for LLM agents doing the
+setup — is **`docs/adapt-to-a-new-game.md`** (Claude Code agents get pointed
+there automatically via `CLAUDE.md`). Validate config edits with
+`node scripts/validate-config.mjs`.
+
 ## The Scout pipeline (AI-developed concepts)
 
 A steady, metered inflow of AI-developed skin concepts ("scouts") keeps the
@@ -36,7 +46,7 @@ Metering and attribution (`scout.js`, pure and import-free):
   pitches.
 
 Anti-slop is mechanical where possible: `node scripts/validate-drops.mjs`
-enforces the drop contract (wizard vocabulary, length caps, a banned-cliché
+enforces the drop contract (game-config.js vocabulary, length caps, a banned-cliché
 lexicon, per-drop slot/tag spread, activation stagger, Jaccard dedupe against
 samples + demo pitches + all prior drops). See
 `docs/scout-pipeline-tech-spec.md` and the brainstorm it came from,

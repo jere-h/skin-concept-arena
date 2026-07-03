@@ -17,6 +17,10 @@
 // centers — the copy still reads.
 
 import { readKey, writeKey } from './store.js';
+// Game identity, the documented demo passphrase, and the calibration
+// threshold, so the tour copy follows game-config.js instead of hardcoding a
+// game name or a number (GAME-ADAPT lives there, not here).
+import { GAME, STUDIO_PASSPHRASE, COMPARISON_THRESHOLD } from './game-config.js';
 
 const TUTORIAL_KEY = 'sca.tutorial.v1';
 
@@ -31,9 +35,9 @@ const STEPS = [
     target: '.masthead__brand',
     title: 'Welcome to the Arena',
     body:
-      'Skin Concept Arena is a pitch-and-vote game for Emberhold cosmetics: ' +
-      'submit skin concepts, battle them head-to-head, and climb a career ' +
-      'ladder. Here is the loop, in four quick stops.',
+      'Skin Concept Arena is a pitch-and-vote game for ' + GAME.name +
+      ' cosmetics: submit skin concepts, battle them head-to-head, and ' +
+      'climb a career ladder. Here is the loop, in four quick stops.',
   },
   {
     view: 'submit',
@@ -58,9 +62,10 @@ const STEPS = [
     target: '#locker-rank',
     title: 'Stop 3 · Watch it pay off',
     body:
-      'After 5 battles a pitch earns a tier medal — Bronze up to Diamond — ' +
-      'and its best tier is remembered forever. Medals, badges, and votes ' +
-      'all feed the career rank on this meter.',
+      'After ' + COMPARISON_THRESHOLD + ' battles a pitch earns a tier ' +
+      'medal — Bronze up to Diamond — and its best tier is remembered ' +
+      'forever. Medals, badges, and votes all feed the career rank on this ' +
+      'meter.',
   },
   {
     view: 'locker',
@@ -78,7 +83,7 @@ const STEPS = [
     body:
       'A passphrase-gated leaderboard for the design team — voters and ' +
       'submitters never see rank or win-rate. (Demo passphrase: ' +
-      'emberhold-studio.)',
+      STUDIO_PASSPHRASE + '.)',
   },
   {
     view: null,

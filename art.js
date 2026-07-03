@@ -58,9 +58,15 @@ function artHue2(id) {
 
 // Item-slot glyphs as stroke path data (viewBox 0 0 64 40, drawn around the
 // center). Keys are lowercase KEYWORDS matched against the slot name, so both
-// the wizard's fixed slots ("Weapon Skin", "Headgear", ...) and the bundled
+// the configured slots ("Weapon Skin", "Headgear", ...) and the bundled
 // sample slots ("Weapon", "Outfit", "Back Accessory", ...) resolve to a shape;
 // anything unrecognized falls back to the diamond mark.
+//
+// GAME-ADAPT (optional): if the new game-config.js ITEM_SLOTS introduces
+// categories none of these keywords match (e.g. "Goal Explosion",
+// "Banner"), placeholder art still works — unmatched slots wear the neutral
+// diamond — but adding a { match: [...keywords], paths: [...] } entry per
+// new category keeps the art distinct. Stroke paths only, viewBox 0 0 64 40.
 const SLOT_GLYPHS = [
   // figure: head + shoulders (Character Skin / Outfit)
   {

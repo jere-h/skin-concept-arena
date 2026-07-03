@@ -19,15 +19,19 @@ import { SAMPLE_PITCHES } from '../sample-data.js';
 // so they belong in the dedupe corpus too. demo.js is safe under plain node:
 // its store/profile imports only touch window inside functions.
 import { DEMO_PITCHES } from '../demo.js';
-import { ITEM_SLOTS, THEME_TAGS } from '../wizard.js';
+// The game's cosmetic vocabulary and per-game lexicon additions come from
+// game-config.js — the single game-context source (GAME-ADAPT lives there).
+import { ITEM_SLOTS, THEME_TAGS, SCOUT_IDEATION } from '../game-config.js';
 
 // --- The mechanical style rules --------------------------------------------
 
 // Case-insensitive substring matches; the recognizable-AI-tell lexicon.
-// Curated, append-only. Matching is on title + description only (inspiration
-// notes cite real references and may legitimately name, say, a "mystical"
-// tradition — the pitch copy itself may not).
-export const BANNED_LEXICON = [
+// Curated, append-only, GAME-AGNOSTIC — per-game additions go in
+// game-config.js SCOUT_IDEATION.banned_lexicon_extra (merged below), never
+// here. Matching is on title + description only (inspiration notes cite
+// real references and may legitimately name, say, a "mystical" tradition —
+// the pitch copy itself may not).
+export const BANNED_LEXICON_BASE = [
   'ethereal',
   'celestial',
   'nexus',
@@ -54,15 +58,41 @@ export const BANNED_LEXICON = [
   'ephemeral',
 ];
 
+// The effective lexicon: base + the game's own additions (normalized to
+// lowercase; malformed config degrades to the base list, never throws).
+export const BANNED_LEXICON = BANNED_LEXICON_BASE.concat(
+  (SCOUT_IDEATION && Array.isArray(SCOUT_IDEATION.banned_lexicon_extra)
+    ? SCOUT_IDEATION.banned_lexicon_extra
+    : []
+  )
+    .filter((phrase) => typeof phrase === 'string' && phrase.trim())
+    .map((phrase) => phrase.toLowerCase())
+);
+
 export const TITLE_MAX = 80; // wizard input maxlength parity
 export const DESC_MAX = 600; // wizard textarea maxlength parity
 export const DESC_MIN = 80; // substance floor: no one-liner slop
 export const MAX_SENTENCES = 3;
 export const MAX_PER_ACTIVE_DATE = 2; // stagger rule within a drop
-export const MIN_DROP_TAG_SPREAD = 4; // distinct theme tags across a drop
 export const SIMILARITY_LIMIT = 0.4; // token-Jaccard ceiling vs any other pitch
-export const SHIP_MIN = 3;
-export const SHIP_MAX = 5;
+
+// Drop-shape bounds DERIVE from the configured vocabulary so a game with a
+// small slot or tag list still has a satisfiable contract: the tag-spread
+// floor is 4 distinct tags (or the whole palette when fewer are configured),
+// and the ship count is 3-5 bounded by the slot count (no two pitches in a
+// drop may share a slot).
+export function tagSpreadFloor(vocab) {
+  const tags = vocab && Array.isArray(vocab.tags) ? vocab.tags.length : 0;
+  return Math.max(1, Math.min(4, tags));
+}
+
+export function shipBounds(vocab) {
+  const slots = vocab && Array.isArray(vocab.slots) ? vocab.slots.length : 0;
+  return {
+    min: Math.max(1, Math.min(3, slots)),
+    max: Math.max(1, Math.min(5, slots)),
+  };
+}
 
 /** Banned-lexicon hits (lowercased substring scan) in a piece of copy. */
 export function lexiconHits(text) {
@@ -103,7 +133,7 @@ export function similarity(textA, textB) {
 
 /**
  * Validate one scout pitch record. Returns an array of violation strings
- * (empty = clean). `vocab` carries { slots, tags } — the wizard's lists.
+ * (empty = clean). `vocab` carries { slots, tags } — the game-config lists.
  */
 export function validatePitch(pitch, vocab) {
   const problems = [];
@@ -126,12 +156,12 @@ export function validatePitch(pitch, vocab) {
   }
 
   if (!vocab.slots.includes(pitch.item_slot)) {
-    push(`item_slot "${pitch.item_slot}" is not in the wizard's ITEM_SLOTS`);
+    push(`item_slot "${pitch.item_slot}" is not in game-config.js ITEM_SLOTS`);
   }
   const tags = Array.isArray(pitch.theme_tags) ? pitch.theme_tags : [];
   if (tags.length < 1) push('at least one theme tag required');
   for (const tag of tags) {
-    if (!vocab.tags.includes(tag)) push(`theme tag "${tag}" is not in the wizard's THEME_TAGS`);
+    if (!vocab.tags.includes(tag)) push(`theme tag "${tag}" is not in game-config.js THEME_TAGS`);
   }
 
   const title = typeof pitch.title === 'string' ? pitch.title : '';
@@ -178,8 +208,9 @@ export function validateDrop(drop, priorPitches, vocab) {
   }
 
   const pitches = Array.isArray(drop.pitches) ? drop.pitches : [];
-  if (pitches.length < SHIP_MIN || pitches.length > SHIP_MAX) {
-    push(`ships ${pitches.length} pitches; must ship ${SHIP_MIN}-${SHIP_MAX}`);
+  const ship = shipBounds(vocab);
+  if (pitches.length < ship.min || pitches.length > ship.max) {
+    push(`ships ${pitches.length} pitches; must ship ${ship.min}-${ship.max}`);
   }
   if (stats && Number.isFinite(stats.shipped) && stats.shipped !== pitches.length) {
     push(`stats.shipped (${stats.shipped}) does not match pitches shipped (${pitches.length})`);
@@ -191,12 +222,13 @@ export function validateDrop(drop, priorPitches, vocab) {
   // Per-pitch field checks.
   for (const pitch of pitches) problems.push(...validatePitch(pitch, vocab));
 
-  // Drop-level spread: no repeated slot, >= MIN_DROP_TAG_SPREAD distinct tags.
+  // Drop-level spread: no repeated slot, >= tagSpreadFloor distinct tags.
   const slots = pitches.map((p) => p && p.item_slot);
   if (new Set(slots).size !== slots.length) push('two pitches share an item_slot');
+  const spreadFloor = tagSpreadFloor(vocab);
   const tagSpread = new Set(pitches.flatMap((p) => (p && Array.isArray(p.theme_tags) ? p.theme_tags : [])));
-  if (tagSpread.size < MIN_DROP_TAG_SPREAD) {
-    push(`only ${tagSpread.size} distinct theme tags; needs ${MIN_DROP_TAG_SPREAD}+`);
+  if (tagSpread.size < spreadFloor) {
+    push(`only ${tagSpread.size} distinct theme tags; needs ${spreadFloor}+`);
   }
 
   // Stagger: at most MAX_PER_ACTIVE_DATE pitches per active_from date.
