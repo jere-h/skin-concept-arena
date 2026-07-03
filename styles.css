@@ -1286,3 +1286,149 @@ progress.meter::-moz-progress-bar {
     flex: 1 1 auto;
   }
 }
+
+/* ============================================================
+   Masthead actions — demo-profile switch + tour replay
+   ============================================================ */
+.masthead__actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-left: auto; /* push to the brand row's far edge when there is room */
+}
+
+.masthead-btn {
+  appearance: none;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-chip);
+  padding: var(--space-1) var(--space-3);
+  min-height: 32px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.masthead-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+/* While the demo identity is active the switch wears the accent so the
+   borrowed state is unmissable (and the way back is one tap). */
+.masthead-btn.is-demo-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.masthead-btn.is-demo-active:hover {
+  filter: brightness(1.07);
+  color: var(--accent-ink);
+}
+
+/* ============================================================
+   Tutorial tour — spotlight overlay + step card
+   ============================================================ */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60; /* over the sticky tabs (30) and toasts (40) */
+}
+
+/* The cutout: a fixed box over the target whose huge shadow dims the rest of
+   the page, so the highlight is literally the only lit region. */
+.tutorial-spotlight {
+  position: fixed;
+  border: 2px solid var(--accent);
+  border-radius: var(--r-card);
+  box-shadow: 0 0 0 200vmax rgba(8, 9, 11, 0.78);
+  transition: top var(--t-med) ease, left var(--t-med) ease,
+    width var(--t-med) ease, height var(--t-med) ease;
+  pointer-events: none;
+}
+
+/* Anchorless step (missing target): keep the dim, hide the ring. */
+.tutorial-spotlight.is-anchorless {
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border: none;
+}
+
+.tutorial-card {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--space-4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-card__count {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tutorial-card__title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.tutorial-card__body {
+  margin: 0 0 var(--space-4);
+  color: var(--ink-2);
+  font-size: 0.9375rem;
+}
+
+.tutorial-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.tutorial-btn {
+  appearance: none;
+  border-radius: var(--r-control);
+  padding: var(--space-2) var(--space-4);
+  min-height: 36px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  transition: filter var(--t-fast) ease, color var(--t-fast) ease;
+}
+
+.tutorial-btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  margin-left: auto; /* Next/Finish anchors the row's far edge */
+}
+
+.tutorial-btn--primary:hover {
+  filter: brightness(1.07);
+}
+
+.tutorial-btn--ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.tutorial-btn--ghost:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-spotlight {
+    transition: none;
+  }
+}

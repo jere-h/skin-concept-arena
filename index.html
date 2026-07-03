@@ -15,6 +15,12 @@
         <p class="wordmark">Skin Concept Arena</p>
         <!-- Fixed-game context chip; app.js fills [data-game-name] slots. -->
         <span class="game-chip" data-game-name>Emberhold</span>
+        <!-- Masthead utilities: demo-profile switch + tour replay (app.js
+             wires both; the demo button relabels itself when demo is active). -->
+        <div class="masthead__actions">
+          <button type="button" id="demo-toggle" class="masthead-btn">Try a demo profile</button>
+          <button type="button" id="tour-replay" class="masthead-btn">Tour</button>
+        </div>
       </div>
       <nav class="tabs" aria-label="Views">
         <button type="button" class="tab is-active" data-view="submit" aria-pressed="true">Submit</button>

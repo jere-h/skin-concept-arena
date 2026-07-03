@@ -31,7 +31,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-thornwarden",
     item_slot: "Outfit",
-    theme_tags: ["mythic", "botanical"],
+    theme_tags: ["Badass", "Gritty"],
     title: "Thornwarden Regalia",
     description:
       "A living-armor set grown from blackthorn and bark, with vine seams that tighten across the shoulders when the wearer sprints. Muted greens over dark iron so it reads as guardian, not villain.",
@@ -41,7 +41,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-tidecaller",
     item_slot: "Weapon",
-    theme_tags: ["oceanic", "mythic"],
+    theme_tags: ["Elegant", "Gritty"],
     title: "Tidecaller Longbow",
     description:
       "A bow carved from a single piece of driftwood, its string a taut thread of seafoam that leaves a brief wet shimmer on release. Barnacle detailing along the grip keeps it grounded and worn, not glossy.",
@@ -51,7 +51,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-halcyon",
     item_slot: "Back Accessory",
-    theme_tags: ["cosmic", "neon"],
+    theme_tags: ["Dreamy", "Elegant"],
     title: "Halcyon Orbit",
     description:
       "A slow-turning ring of pale light that hovers behind the character, with a single small satellite tracing the loop. The glow is dim and steady so it works in dark maps without washing out the silhouette.",
@@ -61,7 +61,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-emberforge",
     item_slot: "Weapon",
-    theme_tags: ["industrial", "gothic"],
+    theme_tags: ["Badass", "Gritty"],
     title: "Emberforge Maul",
     description:
       "A heavy blacksmith hammer with a head that still glows at the cracks, cooling from orange to grey between swings. Soot on the haft and a leather wrap give it weight and use.",
@@ -71,7 +71,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-glasswing",
     item_slot: "Emote",
-    theme_tags: ["botanical", "retro"],
+    theme_tags: ["Cute", "Dreamy"],
     title: "Glasswing Rest",
     description:
       "A short idle where a translucent moth lands on the character's outstretched hand, folds its wings once, and lifts off. Quiet and low-key, meant for lobby downtime rather than a taunt.",
@@ -81,7 +81,7 @@ export const SAMPLE_PITCHES = [
   {
     id: "sample-nocturne",
     item_slot: "Victory Pose",
-    theme_tags: ["gothic", "cosmic"],
+    theme_tags: ["Elegant", "Creepy"],
     title: "Nocturne Bow",
     description:
       "A slow, formal bow as the sky behind the character darkens to deep blue and a scatter of faint stars fades in. Restrained and theatrical without confetti or fireworks.",

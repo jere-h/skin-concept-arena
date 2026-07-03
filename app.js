@@ -25,6 +25,8 @@ import { initWizard } from './wizard.js';
 import { initArena } from './arena.js';
 import { initLocker, refreshLocker, checkCelebrations } from './locker.js';
 import { initStudio } from './studio.js';
+import * as demo from './demo.js';
+import { initTutorial } from './tutorial.js';
 
 // --- Run-wide constants (one source of truth) -----------------------------
 
@@ -303,6 +305,36 @@ function titleCase(id) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+// --- Masthead actions: the demo-profile switch -------------------------------
+//
+// The toggle swaps the device between the visitor's own identity and the
+// pre-populated demo profile (see demo.js). Both directions mutate the
+// profile/ledger/store and then reload — a full reboot is the one
+// guaranteed-consistent way to re-derive all four views on a new identity.
+// Wiring is fail-safe: with no button in the shell, nothing happens.
+
+function wireDemoToggle() {
+  const button = document.getElementById('demo-toggle');
+  if (!button) return;
+  const active = demo.isDemoActive();
+  button.textContent = active ? 'Exit demo profile' : 'Try a demo profile';
+  button.classList.toggle('is-demo-active', active);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  button.addEventListener('click', () => {
+    try {
+      if (demo.isDemoActive()) {
+        demo.exitDemo();
+      } else {
+        demo.enterDemo();
+      }
+    } catch (err) {
+      console.warn('Demo toggle failed; staying on the current profile.', err);
+      return;
+    }
+    window.location.reload();
+  });
+}
+
 // --- Boot ------------------------------------------------------------------
 
 function bootViews(activeProfile) {
@@ -423,9 +455,24 @@ export function initApp() {
   wireTabs();
   bootViews(activeProfile);
   setupEntrance();
+  wireDemoToggle();
 
   // Land on the Submit view by default; all three remain reachable via nav.
   showView('submit');
+
+  // First-visit onboarding tour (tutorial.js): auto-starts once per device,
+  // replayable from the masthead's Tour button. Booted LAST — the views it
+  // spotlights must already be rendered — and fail-safe: a tour fault must
+  // never take down the app it introduces.
+  try {
+    const tour = initTutorial({ showView });
+    const replay = document.getElementById('tour-replay');
+    if (replay && tour) {
+      replay.addEventListener('click', () => tour.start());
+    }
+  } catch (err) {
+    console.warn('Tutorial init failed; skipping onboarding.', err);
+  }
 }
 
 // Self-invoke on module load. type="module" scripts are deferred, so the DOM is

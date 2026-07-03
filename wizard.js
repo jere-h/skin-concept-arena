@@ -36,18 +36,17 @@ const ITEM_SLOTS = [
   'Loading Screen',
 ];
 
-// Fixed theme palette. Toggle chips only — no free-text entry (finding 4).
+// Fixed theme palette: 7 distinct TONALITIES (how a skin feels, not what
+// genre it borrows), so any concept — from any setting — can be tagged by
+// vibe. Toggle chips only — no free-text entry (finding 4).
 const THEME_TAGS = [
-  'Cyberpunk',
-  'Fantasy',
-  'Retro',
-  'Nature',
-  'Cosmic',
-  'Steampunk',
-  'Neon',
-  'Minimalist',
-  'Horror',
-  'Mythic',
+  'Cute',
+  'Badass',
+  'Elegant',
+  'Creepy',
+  'Goofy',
+  'Gritty',
+  'Dreamy',
 ];
 
 function escapeHtml(value) {
