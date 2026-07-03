@@ -59,11 +59,22 @@ win-rate.
 concept must fuse two real-world reference seeds from a curated atlas (Edo
 firefighter coats × smokejumper gear, kintsugi × damascus steel…), pass a
 banned-cliché lexicon, dedupe checks, and house-voice rules — all enforced by
-`node scripts/gate.mjs`, the same gate CI runs. Everything structural about a
-drop (its id, release schedule, which seeds are even eligible this week) is
-computed by a scaffold script and re-checked by the validator — the AI only
-chooses which seeds to fuse and writes the copy. The Studio's feedback export
+`node scripts/gate.mjs`, the same gate CI runs. The Studio's feedback export
 closes the loop: what won last week steers what gets generated next week.
+
+The pipeline draws a deliberate line about **what is left to chance and what
+isn't**, so it's reliable without being repetitive:
+
+- **The machine owns everything structural** — a drop's id, its release
+  schedule, and which seeds are even eligible this week (no seed reused from
+  recent drops) are all *computed* by `scripts/next-drop.mjs` and re-checked
+  by the validator. The AI can't fumble these, and two runs on the same
+  repo produce the same setup every time.
+- **The AI owns the creative choices** — which eligible seeds to pair and
+  the words on the page. This part is intentionally *not* made repeatable:
+  the surprise is the point. It's kept honest by the mechanical gate, not by
+  forcing the same answer twice.
+- **A human owns taste** — the drop only ships if a person merges the PR.
 
 **Optional AI concept images:** attach an image-generator MCP (e.g. Nano
 Banana) to the routine and flip one config flag, and drops ship with concept
