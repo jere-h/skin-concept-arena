@@ -23,10 +23,18 @@ checklist written for LLM agents. The short version:
 ## Commands
 
 ```
-node --test tests/logic.test.js tests/scout.test.js   # full suite
-node scripts/validate-config.mjs                      # game-config contract
-node scripts/validate-drops.mjs                       # scout-drop contract
-python3 -m http.server                                # run the app (any static server)
+node scripts/gate.mjs             # THE canonical gate: config → data → drops → tests
+python3 -m http.server            # run the app (any static server)
+```
+
+The gate is what CI, the adaptation guide, and the drop routine all run —
+one entrypoint, no drift. Its individual steps, when you need just one:
+
+```
+node scripts/validate-config.mjs  # game-config contract
+node scripts/validate-data.mjs    # sample/demo integrity (votes, ledger, vocabulary)
+node scripts/validate-drops.mjs   # scout-drop + seed-atlas contract
+node --test tests/logic.test.js tests/scout.test.js
 ```
 
 ## Architecture invariants (do not break; tests enforce them)

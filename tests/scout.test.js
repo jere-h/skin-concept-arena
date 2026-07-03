@@ -34,6 +34,11 @@ import {
   sentenceCount,
 } from '../scripts/validate-drops.mjs';
 import { validateConfig } from '../scripts/validate-config.mjs';
+import { validateAllData, validateVotes } from '../scripts/validate-data.mjs';
+import { validateAtlas, atlasSeedSet, loadAtlas } from '../scripts/validate-drops.mjs';
+import { SAMPLE_VOTES } from '../sample-data.js';
+import { DEMO_VOTES, DEMO_PROFILE_ID, DEMO_PROGRESS } from '../demo.js';
+import { slotGlyphPaths } from '../art.js';
 
 const VOCAB = { slots: ITEM_SLOTS, tags: THEME_TAGS };
 const NOW = '2026-07-10T12:00:00.000Z';
@@ -373,6 +378,18 @@ describe('game-config.js — the bundled config passes validate-config', () => {
     assert.deepEqual(problems, []);
   });
 
+  test('capacity warning fires when the window exceeds the share cap (R5, mechanical)', () => {
+    const oversized = { ...gameConfig, SCOUT_WINDOW_K: 40 };
+    const problems = validateConfig(oversized, { samplePitchCount: 6 });
+    assert.ok(
+      problems.some((p) => p.startsWith('WARNING') && p.includes('SCOUT_WINDOW_K')),
+      problems.join('\n')
+    );
+    // The shipped config is within capacity: no warning.
+    const clean = validateConfig(gameConfig, { samplePitchCount: 6 });
+    assert.ok(!clean.some((p) => p.includes('SCOUT_WINDOW_K')));
+  });
+
   test('the validator has teeth: broken configs are rejected', () => {
     const broken = {
       ...gameConfig,
@@ -388,6 +405,166 @@ describe('game-config.js — the bundled config passes validate-config', () => {
     assert.ok(problems.some((p) => p.includes('unique')), 'tag uniqueness checked');
     assert.ok(problems.some((p) => p.includes('SCOUT_POOL_SHARE')), 'share range checked');
     assert.ok(problems.some((p) => p.includes('visual_direction')), 'ideation checked');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6c. Bundled data — the shipped samples/demo pass the integrity validator
+// ---------------------------------------------------------------------------
+
+describe('validate-data — bundled sample/demo integrity', () => {
+  const shipped = {
+    samplePitches: SAMPLE_PITCHES,
+    sampleVotes: SAMPLE_VOTES,
+    demoPitches: DEMO_PITCHES,
+    demoVotes: DEMO_VOTES,
+    demoProfileId: DEMO_PROFILE_ID,
+    demoProgress: DEMO_PROGRESS,
+    drops: SCOUT_DROPS,
+    vocab: { slots: ITEM_SLOTS, tags: THEME_TAGS },
+    threshold: 5,
+  };
+
+  test('the shipped data has zero fatal violations (ledger check included)', () => {
+    const fatal = validateAllData(shipped).filter((p) => !p.startsWith('WARNING'));
+    assert.deepEqual(fatal, []);
+  });
+
+  test('vocabulary drift in bundled data is FATAL, not a warning', () => {
+    const drifted = {
+      ...shipped,
+      samplePitches: SAMPLE_PITCHES.map((p, i) =>
+        i === 0 ? { ...p, item_slot: 'Bogus Slot' } : p
+      ),
+    };
+    const fatal = validateAllData(drifted).filter((p) => !p.startsWith('WARNING'));
+    assert.ok(
+      fatal.some((p) => p.includes('Bogus Slot')),
+      fatal.join('\n')
+    );
+  });
+
+  test('a lying demo ledger is caught (unearned badge claim + missing earned badge)', () => {
+    const lying = {
+      ...shipped,
+      demoProgress: {
+        ...DEMO_PROGRESS,
+        unlocked: { ...DEMO_PROGRESS.unlocked, 'full-loadout': '2026-06-17T00:00:00.000Z' },
+      },
+    };
+    const problems = validateAllData(lying);
+    assert.ok(problems.some((p) => p.includes('claims badge "full-loadout"')), problems.join('\n'));
+
+    const omitting = {
+      ...shipped,
+      demoProgress: { ...DEMO_PROGRESS, unlocked: {} },
+    };
+    const omitted = validateAllData(omitting);
+    assert.ok(omitted.some((p) => p.includes('toast storm')), omitted.join('\n'));
+  });
+
+  test('broken vote wiring is caught (winner not a participant, orphan id, self-battle)', () => {
+    const known = new Set(['a', 'b']);
+    const bad = [
+      { id: 'v1', pitch_a_id: 'a', pitch_b_id: 'b', winner_id: 'c' },
+      { id: 'v2', pitch_a_id: 'a', pitch_b_id: 'ghost', winner_id: 'a' },
+      { id: 'v3', pitch_a_id: 'a', pitch_b_id: 'a', winner_id: 'a' },
+      { id: 'v1', pitch_a_id: 'b', pitch_b_id: 'a', winner_id: 'b' },
+    ];
+    const problems = validateVotes(bad, known, 'test vote');
+    assert.ok(problems.some((p) => p.includes('not one of the two participants')));
+    assert.ok(problems.some((p) => p.includes('not a bundled pitch')));
+    assert.ok(problems.some((p) => p.includes('cannot battle itself')));
+    assert.ok(problems.some((p) => p.includes('duplicate vote id')));
+  });
+
+  test('id collisions across samples, demo, and drops are caught', () => {
+    const clash = {
+      ...shipped,
+      demoPitches: DEMO_PITCHES.concat([
+        { ...DEMO_PITCHES[0], id: SAMPLE_PITCHES[0].id },
+      ]),
+    };
+    const problems = validateAllData(clash);
+    assert.ok(problems.some((p) => p.includes('duplicate pitch id')), problems.join('\n'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6d. Seed atlas + citations + drop-shape additions
+// ---------------------------------------------------------------------------
+
+describe('validate-drops — atlas gate, seed citations, sparks, stagger', () => {
+  const atlas = loadAtlas();
+
+  test('the shipped atlas passes; the shipped drops cite only real seeds', () => {
+    assert.deepEqual(validateAtlas(atlas, VOCAB), []);
+    const corpus = SAMPLE_PITCHES.concat(DEMO_PITCHES);
+    assert.deepEqual(validateAll(SCOUT_DROPS, corpus, VOCAB, atlas), []);
+  });
+
+  test('atlas violations are caught: off-vocab affinity, duplicates, thin atlas', () => {
+    const bad = {
+      seeds: [
+        { seed: 'A thing', affinity: { slots: ['Not A Slot'], tags: ['Not A Tag'] } },
+        { seed: 'A thing', affinity: {} },
+      ],
+    };
+    const problems = validateAtlas(bad, VOCAB);
+    assert.ok(problems.some((p) => p.includes('Not A Slot')));
+    assert.ok(problems.some((p) => p.includes('duplicate seed')));
+    assert.ok(problems.some((p) => p.includes('40+')));
+  });
+
+  test('a hallucinated inspiration source fails the citation check', () => {
+    const seedNames = atlasSeedSet(atlas);
+    const fake = validScout('fakecite', {
+      inspiration: {
+        sources: ['Kintsugi ceramic repair', 'A seed I just made up'],
+        note: 'Real note.',
+      },
+    });
+    const d = drop([fake]);
+    d.sparks = [
+      { id: 'sp-1', sources: ['Kintsugi ceramic repair', 'Carousel horse carving'], hook: 'A hook.' },
+      { id: 'sp-2', sources: ['Venetian glassblowing', 'Carousel horse carving'], hook: 'A hook two.' },
+      { id: 'sp-3', sources: ['Ukiyo-e wave prints', 'Carousel horse carving'], hook: 'A hook three.' },
+    ];
+    const problems = validateDrop(d, [], VOCAB, seedNames);
+    assert.ok(
+      problems.some((p) => p.includes('"A seed I just made up" is not a seed')),
+      problems.join('\n')
+    );
+  });
+
+  test('spark count bounds and pre-generation activation are enforced', () => {
+    const early = validScout('early', { active_from: '2026-06-01' });
+    const d = drop([early]); // drop() sets generated_at 2026-07-01; sparks []
+    const problems = validateDrop(d, [], VOCAB);
+    assert.ok(problems.some((p) => p.includes('sparks; must ship')), problems.join('\n'));
+    assert.ok(problems.some((p) => p.includes('predates')), problems.join('\n'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6e. art.js glyph resolution — specific match or neutral fallback, never false
+// ---------------------------------------------------------------------------
+
+describe('art.slotGlyphPaths — word-prefix matching', () => {
+  test('every configured slot resolves, and Weapon Skin gets the sword (not the figure)', () => {
+    const figure = slotGlyphPaths('Character Skin');
+    const sword = slotGlyphPaths('Weapon Skin');
+    assert.notDeepEqual(sword, figure, 'the skin suffix must not hijack weapon slots');
+    for (const slot of ITEM_SLOTS) {
+      assert.ok(Array.isArray(slotGlyphPaths(slot)), `${slot} resolves`);
+    }
+  });
+
+  test('substring traps fall back to the neutral diamond instead of a false glyph', () => {
+    const diamond = slotGlyphPaths('Completely Unknown Slot');
+    assert.deepEqual(slotGlyphPaths('Ship Figurehead'), diamond, "'head' inside figurehead");
+    assert.deepEqual(slotGlyphPaths('Cutlass Skin'), diamond, "generic 'skin' suffix");
+    assert.notDeepEqual(slotGlyphPaths('Headgear'), diamond, 'real prefix still matches');
   });
 });
 

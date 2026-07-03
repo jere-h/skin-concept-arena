@@ -173,4 +173,5 @@ and the validator's anti-slop rules rejecting seeded violations.
 
 Serve this directory as static files (GitHub Pages or any static host). No
 build step required. The studio passphrase is a documented client-side
-constant in `app.js` (`emberhold-studio`), a convenience gate, not security.
+constant in `game-config.js` (`STUDIO_PASSPHRASE`), a convenience gate, not
+security.

@@ -1,0 +1,29 @@
+# CI — the same mechanical gate every agent workflow runs locally
+# (docs/adapt-to-a-new-game.md acceptance, docs/scout-routine.md STEP 5),
+# enforced on every push and PR so a human merging an agent-authored PR
+# (scout drops, adaptations) has a green check to trust even when the agent
+# forgot to run the gate itself.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The single canonical gate — the same command CLAUDE.md, the
+      # adaptation guide, and the drop routine cite. Never inline the
+      # individual checks here: one entrypoint is what prevents drift.
+      - name: Gate (config → data → drops → tests)
+        run: node scripts/gate.mjs

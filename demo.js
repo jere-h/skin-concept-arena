@@ -43,9 +43,17 @@ const DEMO_PROFILE = Object.freeze({
 
 // GAME-ADAPT: the four DEMO_PITCHES below are Emberhold-flavored — rewrite
 // their titles/descriptions/slots/tags for a new game (use game-config.js
-// ITEM_SLOTS / THEME_TAGS; keep the ids, the vote wiring, and the tier
-// spread — one Diamond, one Gold, one Silver, one calibrating — so the demo
-// Locker still demonstrates every progression surface). See
+// ITEM_SLOTS / THEME_TAGS exactly). Keep the demo pitch ids, the vote-wiring
+// SHAPE, and the tier spread — one Diamond, one Gold, one Silver, one
+// calibrating — so the demo Locker still demonstrates every progression
+// surface. Two couplings that are easy to miss (the gate checks both):
+//   1. DEMO_VOTES below reference SAMPLE pitch ids (the demo profile voted
+//      on others' work) — re-point those at your NEW sample-data ids.
+//   2. The demo pitches' tags must cover progression.THEME_EXPLORER_TAGS
+//      (= min(6, THEME_TAGS.length)) distinct tags, or the ledger's
+//      'theme-explorer' unlock becomes a lie.
+// `node scripts/validate-data.mjs` recomputes badges/tiers from this data
+// and fails on any drift from DEMO_PROGRESS. See
 // docs/adapt-to-a-new-game.md step 5.
 //
 // Compact inline-SVG thumbnails (same discipline as sample-data.js: neutrals
@@ -150,7 +158,12 @@ export const DEMO_VOTES = [
 // Battle-Tested + Silver Standard + Gilded + Flawless (peaks), First Verdict
 // (8 votes cast), Dedicated (3 distinct vote days). Career points: peaks
 // 70+40+20 = 130, badges 9x10 = 90, votes 8 -> 228 -> Master (160-249).
-const DEMO_PROGRESS = Object.freeze({
+// Exported for scripts/validate-data.mjs, which RECOMPUTES badge
+// eligibility and tiers from the pitches/votes above and fails the gate if
+// this hand-written ledger drifts from them — the "kept exactly consistent"
+// promise, made mechanical. (Data-only export: this module still never
+// imports ranking or progression.)
+export const DEMO_PROGRESS = Object.freeze({
   unlocked: {
     'first-pitch': '2026-06-11T09:30:01.000Z',
     'three-pitches': '2026-06-14T11:45:01.000Z',

@@ -15,7 +15,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The canonical gate runs BEFORE deploy: branch protection lives outside
+  # the repo, so a direct push to main that fails validation must not ship.
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Gate (config → data → drops → tests)
+        run: node scripts/gate.mjs
+
   deploy:
+    needs: gate
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
