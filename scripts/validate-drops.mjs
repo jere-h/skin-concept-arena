@@ -28,6 +28,17 @@ import {
   SCOUT_IMAGES,
   PITCH_LIMITS,
 } from '../game-config.js';
+// The deterministic seed plan (scripts/seed-plan.mjs): seed ELIGIBILITY is
+// recomputable from committed repo state, so the validator re-derives what
+// the scaffolder printed and rejects pitches citing ineligible seeds
+// (rev 6). Pairing within the eligible set stays a creative choice — see
+// the determinism doctrine, docs/scout-pipeline-tech-spec.md §4.0.
+import {
+  recentSeedNames,
+  normalizeSeedName,
+  dropNumber,
+  RECENCY_WINDOW,
+} from './seed-plan.mjs';
 
 // --- The mechanical style rules --------------------------------------------
 
@@ -87,6 +98,28 @@ export const SPARKS_MIN = 3; // every drop carries inspiration sparks
 export const SPARKS_MAX = 5;
 export const ATLAS_MIN_SEEDS = 40; // the routine needs room to combine
 
+// Rev 6 ("deterministic pipeline") rules apply to drops GENERATED on/after
+// this date. Drops before it are grandfathered — they are append-only and
+// can never be edited into compliance, so tightening a rule must never
+// retroactively redden the gate. Everything from PLAN_RULES_SINCE on:
+//   (a) seed ELIGIBILITY is mechanical (scripts/seed-plan.mjs): no seed
+//       cited by pitches in the two most recent drops, no citing a seed
+//       the same run just appended to the atlas (added_in stamp),
+//   (b) intra-drop seed spread: no seed carries two pitches in one drop,
+//   (c) stats.generated must be >= GENERATED_FLOOR_X x shipped (the spec's
+//       overgenerate-and-cull ratio; older drops keep the original 2x floor),
+//   (d) titles get Jaccard near-duplicate checking, not just exact-match.
+export const PLAN_RULES_SINCE = '2026-07-04';
+export const GENERATED_FLOOR_X = 4;
+export const LEGACY_GENERATED_FLOOR_X = 2;
+export const TITLE_SIMILARITY_LIMIT = 0.3; // titles are short; one shared token in three bites
+
+/** True when a drop was generated under the rev-6 strict rules. */
+export function underPlanRules(drop) {
+  const date = drop && typeof drop.generated_at === 'string' ? drop.generated_at.slice(0, 10) : '';
+  return date >= PLAN_RULES_SINCE;
+}
+
 // Drop-shape bounds DERIVE from the configured vocabulary so a game with a
 // small slot or tag list still has a satisfiable contract: the tag-spread
 // floor is 4 distinct tags (or the whole palette when fewer are configured),
@@ -105,10 +138,26 @@ export function shipBounds(vocab) {
   };
 }
 
-/** Banned-lexicon hits (lowercased substring scan) in a piece of copy. */
+/**
+ * Banned-lexicon hits in a piece of copy. Matching is anchored at a WORD
+ * START but open-ended on the right: "unleash" catches "unleashed" and
+ * "unleashes" (morphological variants are the point of the lexicon) while
+ * "nexus" no longer false-positives inside an unrelated word like
+ * "annexus". Case-insensitive; phrases may contain spaces.
+ */
+const LEXICON_PATTERNS = new Map();
+function lexiconPattern(phrase) {
+  let pattern = LEXICON_PATTERNS.get(phrase);
+  if (!pattern) {
+    pattern = new RegExp(`(?<![a-z0-9])${escapeRegExp(phrase)}`);
+    LEXICON_PATTERNS.set(phrase, pattern);
+  }
+  return pattern;
+}
+
 export function lexiconHits(text) {
   const hay = String(text == null ? '' : text).toLowerCase();
-  return BANNED_LEXICON.filter((phrase) => hay.includes(phrase));
+  return BANNED_LEXICON.filter((phrase) => lexiconPattern(phrase).test(hay));
 }
 
 /** Sentence count: naive terminal-punctuation split, good enough for caps. */
@@ -150,11 +199,12 @@ function escapeRegExp(text) {
 /**
  * Image rules for one pitch, keyed off game-config SCOUT_IMAGES (`images`).
  * Disabled (the default): image_url must be '' — placeholder art only.
- * Enabled: image_url may ALSO be a data:image/ URI or a committed file
- * named `<asset_dir><pitch-id>.<ext>`, never an external http(s) URL (design
- * lock: zero external assets), and must carry image_gen provenance whose
- * prompt demonstrably came from the template: it cites both inspiration
- * seeds and the item_slot, and stays banned-lexicon-clean.
+ * Enabled: image_url may ALSO be a committed file named
+ * `<asset_dir><pitch-id>.<ext>` — one representation, no data-URI variant
+ * (rev 6 simplification) — never an external http(s) URL (design lock:
+ * zero external assets), and must carry image_gen provenance whose prompt
+ * demonstrably came from the template: it cites both inspiration seeds and
+ * the item_slot, and stays banned-lexicon-clean.
  */
 function imageProblems(pitch, images, push) {
   const cfg = images && typeof images === 'object' ? images : {};
@@ -182,14 +232,11 @@ function imageProblems(pitch, images, push) {
     push('image_url must not be an external URL (design lock: zero external assets)');
   }
   const assetDir = typeof cfg.asset_dir === 'string' && cfg.asset_dir ? cfg.asset_dir : 'assets/scout-art/';
-  const isDataUri = /^data:image\//i.test(url);
   const fileShape = new RegExp(
     `^${escapeRegExp(assetDir)}${escapeRegExp(String(pitch.id))}\\.(png|jpe?g|webp|svg)$`
   );
-  if (!isDataUri && !fileShape.test(url)) {
-    push(
-      `image_url must be '', a data:image/ URI, or ${assetDir}<pitch-id>.<png|jpg|jpeg|webp|svg>`
-    );
+  if (!fileShape.test(url)) {
+    push(`image_url must be '' or ${assetDir}<pitch-id>.<png|jpg|jpeg|webp|svg>`);
   }
 
   const gen = pitch.image_gen;
@@ -317,6 +364,14 @@ export function validateAtlas(atlas, vocab) {
     const key = name.toLowerCase().trim();
     if (seen.has(key)) problems.push(`seed-atlas: duplicate seed "${name}"`);
     seen.add(key);
+    // added_in stamps a seed with the drop whose run appended it (rev 6):
+    // the seed-plan excludes such entries from that drop's own proposal
+    // menu, so a run can never cite a seed it just invented.
+    if (entry.added_in !== undefined && dropNumber(entry.added_in) === null) {
+      problems.push(
+        `seed-atlas "${name}": added_in must be a 'drop-NNN' id (the drop whose run appended it)`
+      );
+    }
     const affinity = entry.affinity || {};
     for (const slot of Array.isArray(affinity.slots) ? affinity.slots : []) {
       if (!vocab.slots.includes(slot)) {
@@ -375,8 +430,11 @@ export function validateDrop(drop, priorPitches, vocab, seedNames, images) {
   if (stats && Number.isFinite(stats.shipped) && stats.shipped !== pitches.length) {
     push(`stats.shipped (${stats.shipped}) does not match pitches shipped (${pitches.length})`);
   }
-  if (stats && Number.isFinite(stats.generated) && stats.generated < pitches.length * 2) {
-    push('stats.generated under 2x shipped — overgenerate and cull, do not pad');
+  // Overgeneration floor: the spec's 4x for rev-6 drops; pre-existing drops
+  // keep the 2x floor they were validated under (append-only grandfathering).
+  const floorX = underPlanRules(drop) ? GENERATED_FLOOR_X : LEGACY_GENERATED_FLOOR_X;
+  if (stats && Number.isFinite(stats.generated) && stats.generated < pitches.length * floorX) {
+    push(`stats.generated under ${floorX}x shipped — overgenerate and cull, do not pad`);
   }
 
   // Per-pitch field checks.
@@ -389,6 +447,32 @@ export function validateDrop(drop, priorPitches, vocab, seedNames, images) {
   const tagSpread = new Set(pitches.flatMap((p) => (p && Array.isArray(p.theme_tags) ? p.theme_tags : [])));
   if (tagSpread.size < spreadFloor) {
     push(`only ${tagSpread.size} distinct theme tags; needs ${spreadFloor}+`);
+  }
+
+  // Seed spread within the drop (rev 6): no seed carries two pitches — a
+  // drop of N concepts draws on 2N distinct seeds, so one seed can never
+  // dominate a week. Objective, so mechanical; grandfathered like the
+  // other plan rules.
+  if (underPlanRules(drop)) {
+    const seedUse = new Map();
+    for (const pitch of pitches) {
+      const sources =
+        pitch && pitch.inspiration && Array.isArray(pitch.inspiration.sources)
+          ? pitch.inspiration.sources
+          : [];
+      for (const source of sources) {
+        const key = normalizeSeedName(source);
+        if (!key) continue;
+        if (seedUse.has(key)) {
+          push(
+            `${pitch.id}: seed "${source}" already carries ${seedUse.get(key)} ` +
+              'in this drop — each pitch must draw on two seeds no sibling uses'
+          );
+        } else {
+          seedUse.set(key, pitch.id);
+        }
+      }
+    }
   }
 
   // Stagger: at most MAX_PER_ACTIVE_DATE pitches per active_from date, and
@@ -429,7 +513,10 @@ export function validateDrop(drop, priorPitches, vocab, seedNames, images) {
   }
 
   // Dedupe: title uniqueness and description similarity vs everything prior
-  // AND vs siblings within the drop.
+  // AND vs siblings within the drop. Rev-6 drops additionally get title
+  // NEAR-duplicate checking ("Ashwalker Brigade" vs "Ashwalker Company"
+  // must not both ship); grandfathered drops keep exact-match only.
+  const strictTitles = underPlanRules(drop);
   const others = priorPitches.concat([]);
   for (const pitch of pitches) {
     for (const other of others) {
@@ -438,6 +525,14 @@ export function validateDrop(drop, priorPitches, vocab, seedNames, images) {
       const titleB = String(other.title || '').toLowerCase().trim();
       if (titleA && titleA === titleB) {
         push(`${pitch.id}: title duplicates "${other.title}" (${other.id || 'prior pitch'})`);
+      } else if (strictTitles && titleA) {
+        const titleScore = similarity(titleA, titleB);
+        if (titleScore > TITLE_SIMILARITY_LIMIT) {
+          push(
+            `${pitch.id}: title too similar to "${other.title}" ` +
+              `(${other.id || 'prior pitch'}; jaccard ${titleScore.toFixed(2)} > ${TITLE_SIMILARITY_LIMIT})`
+          );
+        }
       }
       const score = similarity(pitch.description, other.description);
       if (score >= SIMILARITY_LIMIT) {
@@ -487,9 +582,11 @@ export function validateAll(drops, samplePitches, vocab, atlas, images) {
     seedNames = atlasSeedSet(atlas);
   }
 
-  // Drop ids: unique and 'drop-NNN'-shaped (the routine's increment contract
-  // — docs/scout-routine.md STEP 4 — made mechanical).
+  // Drop ids: unique, 'drop-NNN'-shaped, and CONSECUTIVE (the routine's
+  // increment contract — the scaffolder computes max+1, and a gap means a
+  // run misnumbered its drop).
   const seenDropIds = new Set();
+  const numbers = [];
   for (const drop of list) {
     const dropId = drop && drop.drop_id;
     if (typeof dropId !== 'string') continue; // shape error reported per-drop below
@@ -497,6 +594,18 @@ export function validateAll(drops, samplePitches, vocab, atlas, images) {
     seenDropIds.add(dropId);
     if (!/^drop-\d{3,}$/.test(dropId)) {
       problems.push(`drop_id "${dropId}" must match drop-NNN (zero-padded number, e.g. drop-002)`);
+    } else {
+      numbers.push(dropNumber(dropId));
+    }
+  }
+  if (numbers.length > 0) {
+    const min = Math.min(...numbers);
+    const max = Math.max(...numbers);
+    if (max - min + 1 !== numbers.length) {
+      problems.push(
+        `drop numbering has a gap (${min}..${max} over ${numbers.length} drops) — ` +
+          'drop ids must be consecutive; use scripts/next-drop.mjs to number the next drop'
+      );
     }
   }
 
@@ -522,12 +631,64 @@ export function validateAll(drops, samplePitches, vocab, atlas, images) {
     problems.push(...validateDrop(drop, prior, vocab, seedNames, images));
   }
 
+  // SEED ELIGIBILITY (rev 6): for every drop generated under the plan
+  // rules, recompute the deterministic eligibility rules the scaffolder
+  // printed and reject citations outside them. Two objective rules —
+  // pairing WITHIN the eligible set stays the model's creative call:
+  //   - recency: no pitch seed that pitches in the two most recent prior
+  //     drops already used (fresh combinations every week, mechanical)
+  //   - no self-citation: a seed stamped added_in with THIS drop's id was
+  //     appended by this same run and is only eligible from the next drop
+  // Drops predating PLAN_RULES_SINCE are grandfathered (append-only).
+  for (const drop of list) {
+    if (!underPlanRules(drop)) continue;
+    const number = dropNumber(drop && drop.drop_id);
+    if (number === null) continue; // id shape error already reported
+    const priorDrops = list.filter((other) => {
+      const otherNumber = dropNumber(other && other.drop_id);
+      return otherNumber !== null && otherNumber < number;
+    });
+    const recent = recentSeedNames(priorDrops);
+    const selfAdded = new Set();
+    if (atlas && Array.isArray(atlas.seeds)) {
+      for (const entry of atlas.seeds) {
+        if (entry && entry.added_in === drop.drop_id && typeof entry.seed === 'string') {
+          selfAdded.add(normalizeSeedName(entry.seed));
+        }
+      }
+    }
+    for (const pitch of Array.isArray(drop.pitches) ? drop.pitches : []) {
+      const sources =
+        pitch && pitch.inspiration && Array.isArray(pitch.inspiration.sources)
+          ? pitch.inspiration.sources
+          : [];
+      for (const source of sources) {
+        const key = normalizeSeedName(source);
+        if (recent.has(key)) {
+          problems.push(
+            `${drop.drop_id}: ${pitch.id}: seed "${source}" was already used by a ` +
+              `pitch in one of the ${RECENCY_WINDOW} most recent drops — pick from ` +
+              'the eligible seeds printed by `node scripts/next-drop.mjs`'
+          );
+        }
+        if (selfAdded.has(key)) {
+          problems.push(
+            `${drop.drop_id}: ${pitch.id}: seed "${source}" was appended to the ` +
+              'atlas by this same drop (added_in) — a run may not cite its own ' +
+              'additions; the seed becomes eligible from the next drop'
+          );
+        }
+      }
+    }
+  }
+
   return problems;
 }
 
 /**
  * Committed-file check for image_url values that point into the asset dir
- * (data: URIs and empty strings are skipped): the referenced file must
+ * (empty strings skipped; data:/external URLs are already violations
+ * upstream and are skipped here to avoid double-reporting): the referenced file must
  * actually exist, or the Arena would render a broken image straight into a
  * blind vote. Kept out of validateAll so the check functions stay pure /
  * fs-free for browser-adjacent test use; the CLI (and gate) always runs it.

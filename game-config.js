@@ -108,8 +108,8 @@ export const SCOUT_WINDOW_K = 4;
 // enabled false the drop validator requires image_url '' on every scout
 // (placeholder art only), and nothing else here is consulted. Flipping
 // enabled to true admits scouts whose image_url points at a committed file
-// under asset_dir (or a data:image/ URI) WITH image_gen provenance — never
-// an external http(s) URL (design lock: zero external assets).
+// under asset_dir WITH image_gen provenance — never an external http(s)
+// URL (design lock: zero external assets).
 export const SCOUT_IMAGES = Object.freeze({
   enabled: false,
 

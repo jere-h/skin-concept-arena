@@ -59,7 +59,10 @@ win-rate.
 concept must fuse two real-world reference seeds from a curated atlas (Edo
 firefighter coats × smokejumper gear, kintsugi × damascus steel…), pass a
 banned-cliché lexicon, dedupe checks, and house-voice rules — all enforced by
-`node scripts/gate.mjs`, the same gate CI runs. The Studio's feedback export
+`node scripts/gate.mjs`, the same gate CI runs. Everything structural about a
+drop (its id, release schedule, which seeds are even eligible this week) is
+computed by a scaffold script and re-checked by the validator — the AI only
+chooses which seeds to fuse and writes the copy. The Studio's feedback export
 closes the loop: what won last week steers what gets generated next week.
 
 **Optional AI concept images:** attach an image-generator MCP (e.g. Nano
